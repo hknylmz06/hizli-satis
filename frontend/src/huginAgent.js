@@ -9,9 +9,14 @@ export async function isAgentOnline(timeoutMs = 1200) {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    const res = await fetch(`${AGENT_URL}/health`, { signal: ctrl.signal })
+    const res = await fetch(`${AGENT_URL}/health`, {
+      signal: ctrl.signal,
+      mode: 'cors',
+      cache: 'no-store'
+    })
     return res.ok
-  } catch {
+  } catch (err) {
+    console.warn('Hugin agent health failed', err)
     return false
   } finally {
     clearTimeout(t)
@@ -44,7 +49,7 @@ export async function ensureHuginAgent() {
 
   return {
     ok: false,
-    message: 'Yazarkasa ajanı kapalı. Bir kez hugin-agent\\publish-agent.ps1 çalıştırın.'
+    message: 'Yazarkasa ajanına ulaşılamadı (Failed to fetch). publish-agent.ps1 ile kurun, Chrome’da sayfayı yenileyin.'
   }
 }
 

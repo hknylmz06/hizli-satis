@@ -26,6 +26,32 @@ builder.Services.AddHttpClient("hugin")
     });
 
 var app = builder.Build();
+
+// Chrome: https://public-site → http://127.0.0.1 için Private Network Access şart
+app.Use(async (ctx, next) =>
+{
+    if (HttpMethods.IsOptions(ctx.Request.Method))
+    {
+        var origin = ctx.Request.Headers.Origin.FirstOrDefault() ?? "*";
+        ctx.Response.Headers["Access-Control-Allow-Origin"] = origin;
+        ctx.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,OPTIONS";
+        ctx.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization,*";
+        ctx.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+        ctx.Response.Headers["Access-Control-Max-Age"] = "86400";
+        ctx.Response.StatusCode = StatusCodes.Status204NoContent;
+        return;
+    }
+
+    ctx.Response.OnStarting(() =>
+    {
+        if (!ctx.Response.Headers.ContainsKey("Access-Control-Allow-Private-Network"))
+            ctx.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+        return Task.CompletedTask;
+    });
+
+    await next();
+});
+
 app.UseCors();
 
 app.MapGet("/", () => Results.Ok(new
