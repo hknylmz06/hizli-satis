@@ -12,6 +12,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options) : DbCont
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
+    public DbSet<FiscalDeviceSetting> FiscalDevices => Set<FiscalDeviceSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -68,6 +69,17 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options) : DbCont
         modelBuilder.Entity<AppSetting>(e =>
         {
             e.Property(x => x.DefaultVatRate).HasPrecision(5, 2);
+        });
+
+        modelBuilder.Entity<FiscalDeviceSetting>(e =>
+        {
+            e.Property(x => x.Provider).HasMaxLength(64);
+            e.Property(x => x.DeviceHost).HasMaxLength(200);
+            e.Property(x => x.SerialNo).HasMaxLength(100);
+            e.Property(x => x.SoftwareId).HasMaxLength(100);
+            e.Property(x => x.HardwareId).HasMaxLength(100);
+            e.Property(x => x.AgentBaseUrl).HasMaxLength(300);
+            e.Property(x => x.LastStatus).HasMaxLength(500);
         });
     }
 }

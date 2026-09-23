@@ -16,6 +16,7 @@ export default function PosLayout() {
           <NavLink to="/app/products">Stok</NavLink>
           <NavLink to="/app/customers">Cari</NavLink>
           <NavLink to="/app/reports">Rapor</NavLink>
+          <NavLink to="/app/fiscal">Yazarkasa</NavLink>
         </nav>
         <button className="ghost" onClick={() => { logout(); navigate('/') }}>Çıkış</button>
       </aside>

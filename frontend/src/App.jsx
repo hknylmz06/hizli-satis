@@ -7,6 +7,7 @@ import QuickSalePage from './pages/QuickSalePage'
 import ProductsPage from './pages/ProductsPage'
 import CustomersPage from './pages/CustomersPage'
 import ReportsPage from './pages/ReportsPage'
+import FiscalPairingPage from './pages/FiscalPairingPage'
 
 function RequireAuth({ role, children }) {
   const { session } = useAuth()
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="products" element={<ProductsPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="fiscal" element={<FiscalPairingPage />} />
       </Route>
     </Routes>
   )
