@@ -11,10 +11,15 @@ export default function QuickSalePage() {
   const [paymentMethod, setPaymentMethod] = useState('Nakit')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [fiscal, setFiscal] = useState(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
     api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
+    api('/api/fiscal/settings', { token: session.token })
+      .then(setFiscal)
+      .catch(() => setFiscal(null))
     inputRef.current?.focus()
   }, [])
 
@@ -37,6 +42,7 @@ export default function QuickSalePage() {
           productId: product.id,
           name: product.name,
           unitPrice: product.salePrice,
+          vatRate: product.vatRate ?? 20,
           quantity: 1
         }]
       })
@@ -58,25 +64,82 @@ export default function QuickSalePage() {
 
   const total = cart.reduce((sum, x) => sum + x.unitPrice * x.quantity, 0)
 
+  async function printFiscalReceipt(saleResult, cartSnapshot, payMethod) {
+    if (!fiscal?.isEnabled || !fiscal?.isPaired || !fiscal?.deviceHost) {
+      return { skipped: true }
+    }
+
+    const agentBase = (fiscal.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
+    try {
+      const health = await fetch(`${agentBase}/health`)
+      if (!health.ok) throw new Error('Yerel ajan kapalı')
+    } catch {
+      return { ok: false, message: 'Satış kaydedildi ama ajan kapalı — fiş basılmadı. Ajanı açıp tekrar deneyin.' }
+    }
+
+    const res = await fetch(`${agentBase}/sale/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceHost: fiscal.deviceHost,
+        devicePort: fiscal.devicePort || 4443,
+        serialNo: fiscal.serialNo || null,
+        softwareId: fiscal.softwareId || null,
+        hardwareId: fiscal.hardwareId || null,
+        paymentMethod: payMethod,
+        grandTotal: saleResult.grandTotal,
+        referenceCode: saleResult.receiptNo,
+        items: cartSnapshot.map((x) => ({
+          name: x.name,
+          quantity: x.quantity,
+          unitPrice: x.unitPrice,
+          vatRate: x.vatRate ?? 20
+        }))
+      })
+    })
+    const data = await res.json()
+    return data
+  }
+
   async function checkout() {
     setError('')
     setMessage('')
+    setBusy(true)
+    const cartSnapshot = [...cart]
+    const payMethod = paymentMethod
     try {
       const result = await api('/api/sales', {
         method: 'POST',
         token: session.token,
         body: {
-          items: cart.map((x) => ({ productId: x.productId, quantity: x.quantity })),
-          paymentMethod,
-          customerId: paymentMethod === 'Veresiye' ? customerId || null : null
+          items: cartSnapshot.map((x) => ({ productId: x.productId, quantity: x.quantity })),
+          paymentMethod: payMethod,
+          customerId: payMethod === 'Veresiye' ? customerId || null : null
         }
       })
-      setMessage(`Satış tamam: ${result.receiptNo} — ${result.grandTotal.toFixed(2)} ₺`)
+
       setCart([])
       setBarcode('')
+
+      let msg = `Satış tamam: ${result.receiptNo} — ${result.grandTotal.toFixed(2)} ₺`
+      const fiscalResult = await printFiscalReceipt(result, cartSnapshot, payMethod)
+      if (fiscalResult?.skipped) {
+        // yazarkasa kapalı / eşleşmemiş
+      } else if (fiscalResult?.ok) {
+        msg += fiscalResult.receiptNo
+          ? ` | Yazarkasa fiş: ${fiscalResult.receiptNo}`
+          : ' | Yazarkasa fiş basıldı'
+      } else if (fiscalResult?.message) {
+        setError(fiscalResult.message)
+        if (fiscalResult.raw) console.warn('Hugin raw:', fiscalResult.raw)
+      }
+
+      setMessage(msg)
       inputRef.current?.focus()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -84,6 +147,11 @@ export default function QuickSalePage() {
     <div className="sale-layout">
       <section>
         <h1>Hızlı Satış</h1>
+        {fiscal?.isPaired ? (
+          <p className="success">Yazarkasa eşli — satışta fiş basılır</p>
+        ) : (
+          <p className="hint">Yazarkasa eşli değil. Fiş için Yazarkasa menüsünden eşleştirin.</p>
+        )}
         <form className="barcode-row" onSubmit={addByBarcode}>
           <input
             ref={inputRef}
@@ -158,8 +226,8 @@ export default function QuickSalePage() {
           </label>
         )}
 
-        <button className="primary wide" disabled={!cart.length} onClick={checkout}>
-          Satışı Tamamla
+        <button className="primary wide" disabled={!cart.length || busy} onClick={checkout}>
+          {busy ? 'İşleniyor...' : 'Satışı Tamamla'}
         </button>
         <p className="hint">Demo barkodlar: 8690000000011, 8690000000028</p>
       </aside>
