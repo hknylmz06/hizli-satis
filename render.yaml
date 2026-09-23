@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: hizli-satis
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Database__AdminDatabase
+        value: neondb
+      - key: ConnectionStrings__Master
+        sync: false
+      - key: Jwt__Key
+        generateValue: true
