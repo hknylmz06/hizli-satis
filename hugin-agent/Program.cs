@@ -1,4 +1,12 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Net;
+using System.Text.Json;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 builder.WebHost.UseUrls("http://127.0.0.1:5055");
 
@@ -24,10 +32,10 @@ app.MapGet("/", () => Results.Ok(new
 {
     name = "HizliSatis Hugin Agent",
     status = "ok",
-    tip = "Bu program yazarkasa ile bulut yazılım arasında köprüdür. Kapatmayın."
+    tip = "Gizli çalışır. Kapatmayın."
 }));
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health", () => Results.Ok(new { status = "ok", pid = Environment.ProcessId }));
 
 app.MapPost("/pair/test", async (PairTestRequest request, IHttpClientFactory httpClientFactory) =>
 {
@@ -48,7 +56,7 @@ app.MapPost("/pair/test", async (PairTestRequest request, IHttpClientFactory htt
                 ok = false,
                 message = $"Yazarkasa yanıt verdi ama hata: {(int)response.StatusCode}",
                 deviceBaseUrl = baseUrl,
-                raw = Truncate(body, 500)
+                raw = Truncate(body, 800)
             });
         }
 
@@ -65,13 +73,13 @@ app.MapPost("/pair/test", async (PairTestRequest request, IHttpClientFactory htt
         return Results.Ok(new
         {
             ok = false,
-            message = $"Bağlantı kurulamadı: {ex.Message}. Aynı WiFi'de olduğundan ve port 4443 açık olduğundan emin olun.",
+            message = $"Bağlantı kurulamadı: {ex.Message}",
             deviceBaseUrl = baseUrl
         });
     }
 });
 
-app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory httpClientFactory) =>
+app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory httpClientFactory, ILogger<Program> logger) =>
 {
     if (string.IsNullOrWhiteSpace(request.DeviceHost))
         return Results.BadRequest(new { ok = false, message = "DeviceHost zorunlu." });
@@ -83,49 +91,11 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
 
     try
     {
-        // 1) Belge başlat
-        using var startReq = CreateRequest(HttpMethod.Post, $"{baseUrl}/v1/documents", request);
-        startReq.Content = JsonContent.Create(new { docCategory = "SALE" });
-        using var startRes = await client.SendAsync(startReq);
-        var startBody = await startRes.Content.ReadAsStringAsync();
-        if (!startRes.IsSuccessStatusCode)
-        {
-            return Results.Ok(new
-            {
-                ok = false,
-                step = "start",
-                message = $"Belge başlatılamadı: {(int)startRes.StatusCode}",
-                raw = Truncate(startBody, 800)
-            });
-        }
+        var start = await StartDocumentAsync(client, baseUrl, request, retryAfterCancel: true, logger);
+        if (!start.Ok)
+            return Results.Ok(start);
 
-        using var startDoc = System.Text.Json.JsonDocument.Parse(startBody);
-        var root = startDoc.RootElement;
-        if (!root.TryGetProperty("status", out var statusEl) ||
-            !string.Equals(statusEl.GetString(), "SUCCESS", StringComparison.OrdinalIgnoreCase))
-        {
-            return Results.Ok(new
-            {
-                ok = false,
-                step = "start",
-                message = "Belge başlatma SUCCESS dönmedi.",
-                raw = Truncate(startBody, 800)
-            });
-        }
-
-        var documentId = root.GetProperty("data").GetProperty("documentId").GetString();
-        if (string.IsNullOrWhiteSpace(documentId))
-        {
-            return Results.Ok(new
-            {
-                ok = false,
-                step = "start",
-                message = "documentId alınamadı.",
-                raw = Truncate(startBody, 800)
-            });
-        }
-
-        // 2) Belge sonlandır (fiş bas)
+        var documentId = start.DocumentId!;
         var paymentType = MapPayment(request.PaymentMethod);
         var items = request.Items.Select(i =>
         {
@@ -134,17 +104,17 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
             return new Dictionary<string, object?>
             {
                 ["name"] = string.IsNullOrWhiteSpace(i.Name) ? "Ürün" : i.Name.Trim(),
-                ["amount"] = lineTotal.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                ["amount"] = lineTotal.ToString("0.00", CultureInfo.InvariantCulture),
                 ["vatRate"] = (int)Math.Round(i.VatRate),
-                ["quantity"] = qty.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
-                ["unitPrice"] = i.UnitPrice.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                ["quantity"] = qty.ToString("0.###", CultureInfo.InvariantCulture),
+                ["unitPrice"] = i.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture),
                 ["unit"] = "AD"
             };
         }).ToList();
 
         var payAmount = request.GrandTotal > 0
             ? request.GrandTotal
-            : items.Sum(x => decimal.Parse((string)x["amount"]!, System.Globalization.CultureInfo.InvariantCulture));
+            : items.Sum(x => decimal.Parse((string)x["amount"]!, CultureInfo.InvariantCulture));
 
         var finalizePayload = new
         {
@@ -154,7 +124,7 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
                 new
                 {
                     type = paymentType,
-                    amount = payAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+                    amount = payAmount.ToString("0.00", CultureInfo.InvariantCulture)
                 }
             },
             referenceCode = request.ReferenceCode
@@ -164,15 +134,15 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
         finReq.Content = JsonContent.Create(finalizePayload);
         using var finRes = await client.SendAsync(finReq);
         var finBody = await finRes.Content.ReadAsStringAsync();
+        logger.LogInformation("Finalize HTTP {Code}: {Body}", (int)finRes.StatusCode, Truncate(finBody, 500));
 
-        // 206: ödeme alındı ama fiş basılamadı (kağıt vb.) — tekrar denenebilir
         if ((int)finRes.StatusCode == 206)
         {
             return Results.Ok(new
             {
                 ok = false,
                 step = "finalize",
-                message = "Ödeme alındı ama fiş basılamadı (kağıt/pil?). Aynı belgele tekrar deneyin.",
+                message = "Ödeme alındı ama fiş basılamadı (kağıt/pil?).",
                 documentId,
                 raw = Truncate(finBody, 1000)
             });
@@ -180,36 +150,18 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
 
         if (!finRes.IsSuccessStatusCode)
         {
-            // Açık belgeyi iptal etmeyi dene
-            try
-            {
-                using var cancelReq = CreateRequest(HttpMethod.Post, $"{baseUrl}/v1/documents/{documentId}/cancel", request);
-                await client.SendAsync(cancelReq);
-            }
-            catch { /* ignore */ }
-
+            await TryCancelAsync(client, baseUrl, documentId, request);
             return Results.Ok(new
             {
                 ok = false,
                 step = "finalize",
-                message = $"Fiş basılamadı: {(int)finRes.StatusCode}",
+                message = ExtractErrorMessage(finBody) ?? $"Fiş basılamadı: {(int)finRes.StatusCode}",
                 documentId,
                 raw = Truncate(finBody, 1000)
             });
         }
 
-        string? receiptNo = null;
-        try
-        {
-            using var finDoc = System.Text.Json.JsonDocument.Parse(finBody);
-            if (finDoc.RootElement.TryGetProperty("data", out var data) &&
-                data.TryGetProperty("receiptNo", out var rn))
-                receiptNo = rn.GetString();
-            else if (finDoc.RootElement.TryGetProperty("receiptNo", out var rn2))
-                receiptNo = rn2.GetString();
-        }
-        catch { /* ignore parse */ }
-
+        var receiptNo = ExtractReceiptNo(finBody);
         return Results.Ok(new
         {
             ok = true,
@@ -222,6 +174,7 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "sale/print failed");
         return Results.Ok(new
         {
             ok = false,
@@ -232,6 +185,64 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
 });
 
 app.Run();
+
+static async Task<StartResult> StartDocumentAsync(
+    HttpClient client,
+    string baseUrl,
+    DeviceHeaders headers,
+    bool retryAfterCancel,
+    ILogger logger)
+{
+    using var startReq = CreateRequest(HttpMethod.Post, $"{baseUrl}/v1/documents", headers);
+    startReq.Content = JsonContent.Create(new { docCategory = "SALE" });
+    using var startRes = await client.SendAsync(startReq);
+    var startBody = await startRes.Content.ReadAsStringAsync();
+    logger.LogInformation("Start HTTP {Code}: {Body}", (int)startRes.StatusCode, Truncate(startBody, 500));
+
+    var documentId = ExtractDocumentId(startBody);
+    if (!string.IsNullOrWhiteSpace(documentId) &&
+        (startRes.IsSuccessStatusCode || IsSuccessStatus(startBody)))
+    {
+        return new StartResult(true, documentId, null, Truncate(startBody, 800));
+    }
+
+    // Açık belge / state hatası → iptal edip bir kez daha dene
+    if (retryAfterCancel &&
+        ((int)startRes.StatusCode == 409 ||
+         ContainsIgnoreCase(startBody, "ERR_INVALID_STATE") ||
+         ContainsIgnoreCase(startBody, "uygun değil")))
+    {
+        logger.LogWarning("Start conflict, trying cancel+retry");
+        // Bazı cihazlarda aktif belge id'si error.metadata.instance içinde olabilir
+        var activeId = ExtractDocumentIdFromInstance(startBody);
+        if (!string.IsNullOrWhiteSpace(activeId))
+            await TryCancelAsync(client, baseUrl, activeId, headers);
+
+        return await StartDocumentAsync(client, baseUrl, headers, retryAfterCancel: false, logger);
+    }
+
+    return new StartResult(
+        false,
+        null,
+        ExtractErrorMessage(startBody) ??
+        (startRes.IsSuccessStatusCode
+            ? $"Belge başlatma SUCCESS/documentId yok. Cevap: {Truncate(startBody, 200)}"
+            : $"Belge başlatılamadı: {(int)startRes.StatusCode}"),
+        Truncate(startBody, 1000));
+}
+
+static async Task TryCancelAsync(HttpClient client, string baseUrl, string documentId, DeviceHeaders headers)
+{
+    try
+    {
+        using var cancelReq = CreateRequest(HttpMethod.Post, $"{baseUrl}/v1/documents/{documentId}/cancel", headers);
+        await client.SendAsync(cancelReq);
+    }
+    catch
+    {
+        // ignore
+    }
+}
 
 static (HttpClient client, string baseUrl) CreateClient(IHttpClientFactory factory, string host, int port)
 {
@@ -262,8 +273,115 @@ static string MapPayment(string? method) => method?.Trim().ToLowerInvariant() sw
     _ => "CASH"
 };
 
+static bool IsSuccessStatus(string json)
+{
+    if (!TryParse(json, out var root)) return false;
+    if (TryGetProp(root, "status", out var s) &&
+        string.Equals(s.GetString(), "SUCCESS", StringComparison.OrdinalIgnoreCase))
+        return true;
+    return false;
+}
+
+static string? ExtractDocumentId(string json)
+{
+    if (!TryParse(json, out var root)) return null;
+    if (TryGetProp(root, "data", out var data) && TryGetProp(data, "documentId", out var id))
+        return id.GetString();
+    if (TryGetProp(root, "documentId", out var id2))
+        return id2.GetString();
+    return null;
+}
+
+static string? ExtractDocumentIdFromInstance(string json)
+{
+    if (!TryParse(json, out var root)) return null;
+    if (TryGetProp(root, "metadata", out var meta) && TryGetProp(meta, "instance", out var inst))
+    {
+        var path = inst.GetString() ?? "";
+        // /documents/{guid}
+        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var idx = Array.FindIndex(parts, p => p.Equals("documents", StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0 && idx + 1 < parts.Length && Guid.TryParse(parts[idx + 1], out _))
+            return parts[idx + 1];
+    }
+    if (TryGetProp(root, "error", out var err) && TryGetProp(err, "description", out _))
+    {
+        // fallback none
+    }
+    return ExtractDocumentId(json);
+}
+
+static string? ExtractReceiptNo(string json)
+{
+    if (!TryParse(json, out var root)) return null;
+    if (TryGetProp(root, "data", out var data) && TryGetProp(data, "receiptNo", out var rn))
+        return rn.GetString();
+    if (TryGetProp(root, "receiptNo", out var rn2))
+        return rn2.GetString();
+    return null;
+}
+
+static string? ExtractErrorMessage(string json)
+{
+    if (!TryParse(json, out var root)) return null;
+    if (TryGetProp(root, "error", out var err))
+    {
+        TryGetProp(err, "title", out var title);
+        TryGetProp(err, "description", out var desc);
+        var t = title.ValueKind == JsonValueKind.String ? title.GetString() : null;
+        var d = desc.ValueKind == JsonValueKind.String ? desc.GetString() : null;
+        if (!string.IsNullOrWhiteSpace(t) || !string.IsNullOrWhiteSpace(d))
+            return string.Join(" — ", new[] { t, d }.Where(x => !string.IsNullOrWhiteSpace(x)));
+    }
+    return null;
+}
+
+static bool TryParse(string json, out JsonElement root)
+{
+    root = default;
+    try
+    {
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+        root = doc.RootElement.Clone();
+        return true;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+static bool TryGetProp(JsonElement el, string name, out JsonElement value)
+{
+    if (el.ValueKind == JsonValueKind.Object)
+    {
+        foreach (var p in el.EnumerateObject())
+        {
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = p.Value;
+                return true;
+            }
+        }
+    }
+    value = default;
+    return false;
+}
+
+static bool ContainsIgnoreCase(string? hay, string needle) =>
+    !string.IsNullOrEmpty(hay) && hay.Contains(needle, StringComparison.OrdinalIgnoreCase);
+
 static string Truncate(string value, int max) =>
     string.IsNullOrEmpty(value) ? value : (value.Length <= max ? value : value[..max] + "...");
+
+record StartResult(bool Ok, string? DocumentId, string? Message, string? Raw)
+{
+    public string? message => Message;
+    public string? raw => Raw;
+    public bool ok => Ok;
+    public string? documentId => DocumentId;
+    public string step => "start";
+}
 
 abstract record DeviceHeaders(string? SerialNo, string? SoftwareId, string? HardwareId);
 
