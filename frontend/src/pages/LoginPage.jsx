@@ -6,7 +6,7 @@ import { useAuth } from '../auth'
 export default function LoginPage() {
   const { login, session } = useAuth()
   const navigate = useNavigate()
-  const [mode, setMode] = useState('tenant')
+  const [mode, setMode] = useState('admin')
   const [firmaKodu, setFirmaKodu] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -78,9 +78,11 @@ export default function LoginPage() {
           <button className="primary" disabled={loading}>{loading ? 'Giriş...' : 'Giriş Yap'}</button>
         </form>
 
-        {mode === 'admin' && (
-          <p className="hint">Demo: admin / Admin123!</p>
-        )}
+        <p className="hint">
+          {mode === 'admin'
+            ? 'Platform: admin / Admin123!  (önce “Platform Admin” seçili olmalı)'
+            : 'Firma girişi için admin panelden aldığın firma kodu + kullanıcı + şifre gerekir'}
+        </p>
       </div>
       <div className="login-visual" aria-hidden="true" />
     </div>
