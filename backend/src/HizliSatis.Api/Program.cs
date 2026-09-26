@@ -10,7 +10,7 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -91,8 +91,18 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var seeder = scope.ServiceProvider.GetRequiredService<MasterSeedService>();
-    await seeder.InitializeAsync();
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    try
+    {
+        var store = scope.ServiceProvider.GetRequiredService<SqlServerSettingsStore>();
+        await store.EnsureMasterDatabaseAsync();
+        var seeder = scope.ServiceProvider.GetRequiredService<MasterSeedService>();
+        await seeder.InitializeAsync();
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "SQL Server henüz hazır değil. Giriş ekranından sunucuyu ayarlayın.");
+    }
 }
 
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
@@ -116,6 +126,21 @@ if (Directory.Exists(wwwroot))
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = provider });
     app.UseStaticFiles(new StaticFileOptions { FileProvider = provider });
     app.MapFallbackToFile("index.html", new StaticFileOptions { FileProvider = provider });
+}
+else if (app.Environment.IsDevelopment())
+{
+    app.MapFallback(context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        }
+
+        var target = "http://localhost:5173" + context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+        context.Response.Redirect(target);
+        return Task.CompletedTask;
+    });
 }
 
 app.Run();

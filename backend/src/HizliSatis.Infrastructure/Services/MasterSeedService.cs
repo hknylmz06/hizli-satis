@@ -12,6 +12,7 @@ public class MasterSeedService(
     public async Task InitializeAsync(CancellationToken ct = default)
     {
         await db.Database.EnsureCreatedAsync(ct);
+        await EnsureLicenseColumnAsync(ct);
 
         if (!await db.PlatformAdmins.AnyAsync(ct))
         {
@@ -24,5 +25,19 @@ public class MasterSeedService(
             await db.SaveChangesAsync(ct);
             logger.LogInformation("Platform admin seeded: admin / Admin123!");
         }
+    }
+
+    private async Task EnsureLicenseColumnAsync(CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('Tenants', 'LicenseExpiresAt') IS NULL
+            BEGIN
+                ALTER TABLE Tenants ADD LicenseExpiresAt datetime2 NULL;
+                EXEC(N'UPDATE Tenants SET LicenseExpiresAt = DATEADD(year, 1, CreatedAt)');
+                EXEC(N'ALTER TABLE Tenants ALTER COLUMN LicenseExpiresAt datetime2 NOT NULL');
+            END
+            """,
+            ct);
     }
 }

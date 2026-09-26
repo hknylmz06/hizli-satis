@@ -32,6 +32,8 @@ public class AdminTenantsController(
                 t.LastError,
                 t.InitialUsername,
                 t.CreatedAt,
+                t.LicenseExpiresAt,
+                LicenseActive = t.LicenseExpiresAt > DateTime.UtcNow,
                 t.ProvisionedAt
             })
             .ToListAsync(ct);
@@ -64,6 +66,8 @@ public class AdminTenantsController(
             tenant.InitialUsername,
             tenant.InitialPasswordPlain,
             tenant.CreatedAt,
+            tenant.LicenseExpiresAt,
+            LicenseActive = tenant.IsLicenseActive(),
             tenant.ProvisionedAt,
             Notifications = notifications
         });
@@ -75,23 +79,31 @@ public class AdminTenantsController(
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.ContactEmail))
             return BadRequest(new { message = "Firma adı ve e-posta zorunlu." });
 
-        var tenant = await provisioning.RegisterAsync(
-            request.Name,
-            request.ContactEmail,
-            request.ContactPhone,
-            request.ProvisionNow,
-            ct);
-
-        return CreatedAtAction(nameof(Get), new { id = tenant.Id }, new
+        try
         {
-            tenant.Id,
-            tenant.Name,
-            tenant.FirmaKodu,
-            Status = tenant.Status.ToString(),
-            tenant.InitialUsername,
-            tenant.InitialPasswordPlain,
-            tenant.DatabaseName
-        });
+            var tenant = await provisioning.RegisterAsync(
+                request.Name,
+                request.ContactEmail,
+                request.ContactPhone,
+                request.ProvisionNow,
+                ct);
+
+            return CreatedAtAction(nameof(Get), new { id = tenant.Id }, new
+            {
+                tenant.Id,
+                tenant.Name,
+                tenant.FirmaKodu,
+                Status = tenant.Status.ToString(),
+                tenant.InitialUsername,
+                tenant.InitialPasswordPlain,
+                tenant.DatabaseName,
+                tenant.LastError
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.InnerException?.Message ?? ex.Message });
+        }
     }
 
     [HttpPost("{id:guid}/provision")]
@@ -106,6 +118,26 @@ public class AdminTenantsController(
             tenant.InitialUsername,
             tenant.InitialPasswordPlain,
             tenant.LastError
+        });
+    }
+
+    [HttpPost("{id:guid}/renew-license")]
+    public async Task<IActionResult> RenewLicense(Guid id, CancellationToken ct)
+    {
+        var tenant = await masterDb.Tenants.FirstOrDefaultAsync(t => t.Id == id, ct);
+        if (tenant is null) return NotFound();
+
+        var start = tenant.LicenseExpiresAt > DateTime.UtcNow ? tenant.LicenseExpiresAt : DateTime.UtcNow;
+        tenant.LicenseExpiresAt = start.AddYears(1);
+        await masterDb.SaveChangesAsync(ct);
+
+        return Ok(new
+        {
+            tenant.Id,
+            tenant.CreatedAt,
+            tenant.LicenseExpiresAt,
+            LicenseActive = true,
+            message = "Lisans 1 yıl uzatıldı."
         });
     }
 }

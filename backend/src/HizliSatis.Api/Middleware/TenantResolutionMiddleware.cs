@@ -19,7 +19,19 @@ public class TenantResolutionMiddleware(RequestDelegate next)
                 .FirstOrDefaultAsync(t => t.Id == tenantId && t.FirmaKodu == firmaKodu);
 
             if (tenant is { Status: TenantStatus.Ready })
+            {
+                if (!tenant.IsLicenseActive())
+                {
+                    context.Response.StatusCode = StatusCodes.Status402PaymentRequired;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        message = "Lisans süresi doldu. Devam etmek için yıllık ücreti ödemeniz gerekiyor."
+                    });
+                    return;
+                }
+
                 tenantContext.Set(tenant.Id, tenant.FirmaKodu, tenant.ConnectionString);
+            }
         }
 
         await next(context);

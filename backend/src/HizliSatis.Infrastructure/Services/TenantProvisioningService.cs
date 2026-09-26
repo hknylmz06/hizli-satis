@@ -1,22 +1,19 @@
 using HizliSatis.Domain.Enums;
 using HizliSatis.Domain.Master;
 using HizliSatis.Domain.Tenant;
-using HizliSatis.Infrastructure.Options;
 using HizliSatis.Infrastructure.Persistence;
 using HizliSatis.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Npgsql;
 
 namespace HizliSatis.Infrastructure.Services;
 
 public class TenantProvisioningService(
     MasterDbContext masterDb,
-    IOptions<DatabaseOptions> databaseOptions,
+    SqlServerSettingsStore sqlSettings,
     ILogger<TenantProvisioningService> logger)
 {
-    private readonly DatabaseOptions _dbOptions = databaseOptions.Value;
 
     public async Task<Tenant> RegisterAsync(
         string name,
@@ -25,15 +22,13 @@ public class TenantProvisioningService(
         bool provisionNow,
         CancellationToken ct = default)
     {
-        var masterConnection = PostgresConnectionHelper.RequireMasterConnection(
-            masterDb.Database.GetConnectionString());
-
         var firmaKodu = await GenerateUniqueFirmaKoduAsync(ct);
         var dbSlug = CodeGenerator.DatabaseSlug(firmaKodu);
-        PostgresConnectionHelper.EnsureSafeDatabaseName(dbSlug);
+        SqlServerConnectionHelper.EnsureSafeDatabaseName(dbSlug);
 
-        var connectionString = PostgresConnectionHelper.WithDatabase(masterConnection, dbSlug);
+        var connectionString = sqlSettings.ForDatabase(dbSlug);
 
+        var registeredAt = DateTime.UtcNow;
         var tenant = new Tenant
         {
             Name = name.Trim(),
@@ -42,7 +37,9 @@ public class TenantProvisioningService(
             ContactPhone = contactPhone?.Trim(),
             DatabaseName = dbSlug,
             ConnectionString = connectionString,
-            Status = TenantStatus.Pending
+            Status = TenantStatus.Pending,
+            CreatedAt = registeredAt,
+            LicenseExpiresAt = registeredAt.AddYears(1)
         };
 
         masterDb.Tenants.Add(tenant);
@@ -75,13 +72,9 @@ public class TenantProvisioningService(
                 ? CodeGenerator.TemporaryPassword()
                 : tenant.InitialPasswordPlain;
 
-            var masterConnection = PostgresConnectionHelper.RequireMasterConnection(
-                masterDb.Database.GetConnectionString());
+            await EnsureDatabaseExistsAsync(tenant.DatabaseName, ct);
 
-            await EnsureDatabaseExistsAsync(masterConnection, tenant.DatabaseName, ct);
-
-            // Connection string'i güncel master host/şifre ile yeniden üret (cloud'da secret rotate edilebilir)
-            tenant.ConnectionString = PostgresConnectionHelper.WithDatabase(masterConnection, tenant.DatabaseName);
+            tenant.ConnectionString = sqlSettings.ForDatabase(tenant.DatabaseName);
 
             await using var tenantDb = TenantDbContextFactory.CreateForConnection(tenant.ConnectionString);
             await tenantDb.Database.EnsureCreatedAsync(ct);
@@ -171,7 +164,7 @@ public class TenantProvisioningService(
             }
 
             await masterDb.SaveChangesAsync(ct);
-            logger.LogInformation("Tenant provisioned on PostgreSQL: {FirmaKodu} -> {Db}", tenant.FirmaKodu, tenant.DatabaseName);
+            logger.LogInformation("Tenant provisioned on SQL Server: {FirmaKodu} -> {Db}", tenant.FirmaKodu, tenant.DatabaseName);
             return tenant;
         }
         catch (Exception ex)
@@ -184,43 +177,37 @@ public class TenantProvisioningService(
         }
     }
 
-    private async Task EnsureDatabaseExistsAsync(string masterConnection, string databaseName, CancellationToken ct)
+    private async Task EnsureDatabaseExistsAsync(string databaseName, CancellationToken ct)
     {
-        PostgresConnectionHelper.EnsureSafeDatabaseName(databaseName);
+        SqlServerConnectionHelper.EnsureSafeDatabaseName(databaseName);
+        var adminCs = SqlServerSettingsStore.Build(sqlSettings.Get(), "master");
 
-        var adminDatabase = string.IsNullOrWhiteSpace(_dbOptions.AdminDatabase)
-            ? "postgres"
-            : _dbOptions.AdminDatabase;
-
-        var adminCs = PostgresConnectionHelper.WithDatabase(masterConnection, adminDatabase);
-
-        await using var conn = new NpgsqlConnection(adminCs);
+        await using var conn = new SqlConnection(adminCs);
         await conn.OpenAsync(ct);
 
-        await using (var existsCmd = new NpgsqlCommand(
-                         "SELECT 1 FROM pg_database WHERE datname = @name", conn))
+        await using (var existsCmd = new SqlCommand("SELECT DB_ID(@name)", conn))
         {
-            existsCmd.Parameters.AddWithValue("name", databaseName);
+            existsCmd.Parameters.AddWithValue("@name", databaseName);
             var exists = await existsCmd.ExecuteScalarAsync(ct);
-            if (exists is not null)
+            if (exists is not null and not DBNull)
                 return;
         }
 
-        // CREATE DATABASE transaction içinde çalışmaz; Npgsql tek komut olarak gönderir.
-        await using var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", conn);
+        await using var createCmd = new SqlCommand($"CREATE DATABASE [{databaseName}]", conn);
         await createCmd.ExecuteNonQueryAsync(ct);
-        logger.LogInformation("Created PostgreSQL database {Database}", databaseName);
+        logger.LogInformation("Created SQL Server database {Database}", databaseName);
     }
 
     private async Task<string> GenerateUniqueFirmaKoduAsync(CancellationToken ct)
     {
-        for (var i = 0; i < 20; i++)
+        var codes = await masterDb.Tenants.AsNoTracking().Select(t => t.FirmaKodu).ToListAsync(ct);
+        var max = 100000;
+        foreach (var code in codes)
         {
-            var code = CodeGenerator.FirmaKodu();
-            if (!await masterDb.Tenants.AnyAsync(t => t.FirmaKodu == code, ct))
-                return code;
+            if (int.TryParse(code, out var number) && number > max)
+                max = number;
         }
 
-        throw new InvalidOperationException("Benzersiz firma kodu üretilemedi.");
+        return (max + 1).ToString();
     }
 }

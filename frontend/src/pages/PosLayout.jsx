@@ -1,40 +1,50 @@
+import { Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth'
+import Sidebar from '../components/Sidebar'
 import { ensureHuginAgent } from '../huginAgent'
+import { api } from '../api'
+import { useAuth } from '../auth'
 
 export default function PosLayout() {
-  const { session, logout } = useAuth()
-  const navigate = useNavigate()
-  const [agentNote, setAgentNote] = useState('')
+  const location = useLocation()
+  const { session, login } = useAuth()
+  const isPos = location.pathname.startsWith('/app/pos')
+  const [, setAgentNote] = useState('')
 
   useEffect(() => {
-    let cancelled = false
+    if (!session?.token || session.role !== 'TenantUser') return
+    let cancel = false
+    api('/api/auth/me', { token: session.token }).then((me) => {
+      if (cancel) return
+      const prev = JSON.parse(localStorage.getItem('hizlisatis_auth') || '{}')
+      login({
+        ...prev,
+        displayName: me.displayName || prev.displayName,
+        tenantRole: me.tenantRole,
+        permissions: me.permissions
+      })
+    }).catch(() => {})
+    return () => { cancel = true }
+  }, [session?.token])
+
+  useEffect(() => {
     ensureHuginAgent().then((r) => {
-      if (cancelled) return
-      if (r.ok) setAgentNote(r.started ? 'Yazarkasa ajanı gizli başlatıldı' : 'Yazarkasa ajanı hazır')
-      else setAgentNote(r.message || 'Ajan kapalı')
+      setAgentNote(r.ok ? '' : (r.message || ''))
     })
-    return () => { cancelled = true }
   }, [])
 
+  if (isPos) {
+    return (
+      <div className="h-screen bg-slate-950 text-slate-100">
+        <Outlet />
+      </div>
+    )
+  }
+
   return (
-    <div className="pos-shell">
-      <aside className="sidebar">
-        <p className="brand">Hızlı Satış</p>
-        <p className="firma">{session.firmaName}</p>
-        <p className="muted">Kod: {session.firmaKodu}</p>
-        {agentNote && <p className="muted" style={{ fontSize: '0.8rem' }}>{agentNote}</p>}
-        <nav>
-          <NavLink end to="/app">Hızlı Satış</NavLink>
-          <NavLink to="/app/products">Stok</NavLink>
-          <NavLink to="/app/customers">Cari</NavLink>
-          <NavLink to="/app/reports">Rapor</NavLink>
-          <NavLink to="/app/fiscal">Yazarkasa</NavLink>
-        </nav>
-        <button className="ghost" onClick={() => { logout(); navigate('/') }}>Çıkış</button>
-      </aside>
-      <main className="pos-main">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row overflow-hidden">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto bg-slate-950 legacy-page">
         <Outlet />
       </main>
     </div>

@@ -5,6 +5,7 @@ using HizliSatis.Domain.Enums;
 using HizliSatis.Infrastructure.Persistence;
 using HizliSatis.Infrastructure.Services;
 using HizliSatis.Infrastructure.Tenancy;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,7 +15,8 @@ namespace HizliSatis.Api.Controllers;
 [Route("api/auth")]
 public class AuthController(
     MasterDbContext masterDb,
-    JwtTokenService jwt) : ControllerBase
+    JwtTokenService jwt,
+    TenantDbContextFactory tenants) : ControllerBase
 {
     [HttpPost("platform-login")]
     public async Task<ActionResult<AuthResponse>> PlatformLogin([FromBody] PlatformLoginRequest request, CancellationToken ct)
@@ -49,7 +51,11 @@ public class AuthController(
         if (tenant.Status != TenantStatus.Ready)
             return Unauthorized(new { message = $"Firma henüz hazır değil. Durum: {tenant.Status}" });
 
+        if (!tenant.IsLicenseActive())
+            return Unauthorized(new { message = "Lisans süresi doldu. Devam etmek için yıllık ücreti ödemeniz gerekiyor." });
+
         await using var tenantDb = TenantDbContextFactory.CreateForConnection(tenant.ConnectionString);
+        await TenantSchemaEnsuring.EnsureDefinitionsAsync(tenantDb, ct);
         var user = await tenantDb.Users.FirstOrDefaultAsync(u => u.Username == request.Username && u.IsActive, ct);
 
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -66,11 +72,32 @@ public class AuthController(
             new Claim("display_name", user.DisplayName)
         };
 
+        var permissions = TenantAccess.Resolve(user.Role, user.Permissions);
         return Ok(new AuthResponse(
             jwt.CreateToken(claims),
             "TenantUser",
             user.DisplayName,
             tenant.FirmaKodu,
-            tenant.Name));
+            tenant.Name,
+            user.Role,
+            permissions));
+    }
+
+    [HttpGet("me")]
+    [Authorize(Roles = "TenantUser")]
+    public async Task<IActionResult> Me(CancellationToken ct)
+    {
+        await using var db = tenants.Create();
+        await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
+        var name = User.Identity?.Name;
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == name && u.IsActive, ct);
+        if (user is null) return Unauthorized(new { message = "Oturum kullanıcısı bulunamadı." });
+        return Ok(new
+        {
+            user.Username,
+            user.DisplayName,
+            tenantRole = user.Role,
+            permissions = TenantAccess.Resolve(user.Role, user.Permissions)
+        });
     }
 }

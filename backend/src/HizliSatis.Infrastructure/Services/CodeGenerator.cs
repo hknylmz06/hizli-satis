@@ -5,17 +5,6 @@ namespace HizliSatis.Infrastructure.Services;
 
 public static class CodeGenerator
 {
-    private static readonly char[] Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
-
-    public static string FirmaKodu(int length = 6)
-    {
-        Span<char> buffer = stackalloc char[length];
-        var bytes = RandomNumberGenerator.GetBytes(length);
-        for (var i = 0; i < length; i++)
-            buffer[i] = Alphabet[bytes[i] % Alphabet.Length];
-        return new string(buffer);
-    }
-
     public static string Username(string firmaName)
     {
         var slug = new string(firmaName
@@ -40,5 +29,5 @@ public static class CodeGenerator
         return sb.ToString();
     }
 
-    public static string DatabaseSlug(string firmaKodu) => $"firma_{firmaKodu.ToLowerInvariant()}_db";
+    public static string DatabaseSlug(string firmaKodu) => firmaKodu;
 }
