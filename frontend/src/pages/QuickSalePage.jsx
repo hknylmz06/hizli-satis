@@ -9,6 +9,7 @@ import { api, fetchShortcuts, readLocalShortcuts, storeShortcuts } from '../api'
 import { useAuth } from '../auth'
 import { ThemeToggle } from '../theme'
 import { allows } from '../permissions'
+import { READY_IMAGES, keywordImage, searchProductImages } from '../productImages'
 
 const emptySlots = () => [{ items: [] }, { items: [] }, { items: [] }]
 
@@ -106,6 +107,10 @@ export default function QuickSalePage() {
   const [shortcutMode, setShortcutMode] = useState('select')
   const [shortcutSearch, setShortcutSearch] = useState('')
   const [shortcutHits, setShortcutHits] = useState([])
+  const [imageTarget, setImageTarget] = useState(null)
+  const [imageBusy, setImageBusy] = useState(false)
+  const [imageNote, setImageNote] = useState('')
+  const [imageHits, setImageHits] = useState([])
   const [shortcutForm, setShortcutForm] = useState({ name: '', barcode: '', salePrice: '', vatRate: '20', stockQuantity: '100', imageUrl: '' })
   const [shortcutError, setShortcutError] = useState('')
   const inputRef = useRef(null)
@@ -275,13 +280,44 @@ export default function QuickSalePage() {
     return () => clearTimeout(timer)
   }, [shortcutOpen, shortcutMode, shortcutSearch, session.token])
 
+  async function findShortcutImage(name, apply) {
+    const term = String(name || '').trim()
+    if (term.length < 2) {
+      setImageNote('Önce ürün adını yaz.')
+      return
+    }
+    setImageBusy(true)
+    setImageNote('Resim aranıyor...')
+    const hits = await searchProductImages(api, session.token, term)
+    setImageHits(hits)
+    setImageBusy(false)
+    if (hits[0]) {
+      apply(hits[0])
+      setImageNote(hits.length > 1 ? `${hits.length} görsel bulundu. Beğenmezsen hazır görselden seç.` : 'Görsel bulundu.')
+    } else {
+      setImageNote('Bulunamadı. Hazır görselden seç veya dosyadan yükle.')
+    }
+  }
+
   function openShortcutModal() {
     setShortcutError('')
     setShortcutSearch('')
     setShortcutMode('select')
     setShortcutForm({ name: '', barcode: '', salePrice: '', vatRate: '20', stockQuantity: '100', imageUrl: '' })
+    setImageTarget(null)
+    setImageNote('')
+    setImageHits([])
     setShortcutOpen(true)
   }
+
+  useEffect(() => {
+    if (!shortcutOpen || shortcutMode !== 'new') return
+    const name = shortcutForm.name.trim()
+    if (name.length < 3) return
+    const local = keywordImage(name)
+    if (!local) return
+    setShortcutForm((prev) => (prev.imageUrl ? prev : { ...prev, imageUrl: local }))
+  }, [shortcutForm.name, shortcutOpen, shortcutMode])
 
   async function createShortcut(e) {
     e.preventDefault()
@@ -730,6 +766,12 @@ export default function QuickSalePage() {
     const payMethod = method || paymentMethod
     setPaymentMethod(payMethod)
     if (!cart.length || busy) return
+    if (fiscal?.isEnabled && !fiscal?.isPaired) {
+      setError(fiscal.needsAssignment
+        ? 'Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
+        : 'Hata: Yazarkasa eşleşmedi. Satış yapamazsın.')
+      return
+    }
     if (payMethod === 'Veresiye' && !canCredit) {
       setError('Veresiye satış yetkin yok.')
       return
@@ -840,8 +882,13 @@ export default function QuickSalePage() {
           <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
-        {fiscal?.needsAssignment && (
-          <p className="mb-2 text-[11px] font-bold text-amber-200">Bu kullanıcıya yazarkasa tanımlı değil. Fiş yalnız kendi kasası olan kasiyerden basılır.</p>
+        {priceLook && (
+          <div className={`mb-2 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {fiscal?.needsAssignment
+              ? 'FİYAT GÖR MODU. Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
+              : 'Hata: Yazarkasa eşleşmedi. Satış yapamazsın.'}
+          </div>
         )}
 
         <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-2">
@@ -866,11 +913,6 @@ export default function QuickSalePage() {
           <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ürün Ara..." className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-2xl text-white text-xs outline-none" />
         </div>
 
-        {priceLook && (
-          <div className="mb-2 p-2 bg-amber-950 border border-amber-500/60 rounded-2xl text-amber-200 text-[11px] font-bold flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" /> FİYAT GÖR MODU (Satış Kilitli)
-          </div>
-        )}
         {error && (
           <div className="mb-2 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
             <span className="flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{error}</span>
@@ -1135,10 +1177,10 @@ export default function QuickSalePage() {
         )}
 
         <div className="grid grid-cols-2 gap-2.5">
-          <button type="button" disabled={!cart.length || busy} onClick={() => checkout('Nakit')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Banknote className="w-6 h-6" /> NAKİT (F4)</button>
-          <button type="button" disabled={!cart.length || busy} onClick={() => checkout('KrediKarti')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-center gap-2 disabled:opacity-40"><CreditCard className="w-6 h-6" /> KART (F8)</button>
-          <button type="button" disabled={!cart.length || busy} onClick={openSplit} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Layers className="w-6 h-6" /> PARÇALI (F10)</button>
-          <button type="button" disabled={!cart.length || busy || !canCredit} onClick={() => checkout('Veresiye')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Users className="w-6 h-6" /> VERESİYE (F9)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('Nakit')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Banknote className="w-6 h-6" /> NAKİT (F4)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('KrediKarti')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-center gap-2 disabled:opacity-40"><CreditCard className="w-6 h-6" /> KART (F8)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={openSplit} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Layers className="w-6 h-6" /> PARÇALI (F10)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook || !canCredit} onClick={() => checkout('Veresiye')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Users className="w-6 h-6" /> VERESİYE (F9)</button>
         </div>
         <button type="button" disabled={!cart.length || busy} onClick={() => setError('Fatura kesimi sıradaki adım. Satışı nakit, kart veya veresiye ile tamamlayın.')} className="w-full py-5 rounded-2xl text-base font-black border-2 border-purple-500/50 text-purple-300 bg-slate-950 flex items-center justify-center gap-2 disabled:opacity-40">
           <FileText className="w-5 h-5" /> FATURA KES (F12)
@@ -1197,14 +1239,14 @@ export default function QuickSalePage() {
                     const pinned = isOnBoard(product.id)
                     return (
                       <div key={product.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-950 border border-slate-800">
-                        <div className="min-w-0">
+                        <div className="min-w-0 cursor-pointer" onClick={() => setImageTarget(product)}>
                           <div className="text-xs font-bold truncate">{product.name}</div>
                           <div className="text-[10px] text-slate-400 font-mono">{money(product.salePrice)}</div>
                         </div>
                         {pinned ? (
                           <button type="button" onClick={() => unpinFromBoard(product.id)} className="px-2 py-1 rounded-lg bg-rose-700 text-[11px] font-bold">Kaldır</button>
                         ) : (
-                          <button type="button" onClick={() => { pinToBoard(product.id); setProducts((prev) => prev.some((item) => sameId(item.id, product.id)) ? prev : [...prev, product]); setShortcutOpen(false); setMessage(`${product.name} eklendi.`) }} className="px-2 py-1 rounded-lg bg-emerald-600 text-[11px] font-bold">+ Ekle</button>
+                          <button type="button" onClick={() => { setImageTarget(product); pinToBoard(product.id); setProducts((prev) => prev.some((item) => sameId(item.id, product.id)) ? prev : [...prev, product]); if (!productImage(product)) findShortcutImage(product.name, (url) => saveImage(product.id, url)); setMessage(`${product.name} eklendi.`) }} className="px-2 py-1 rounded-lg bg-emerald-600 text-[11px] font-bold">+ Ekle</button>
                         )}
                       </div>
                     )
@@ -1220,21 +1262,58 @@ export default function QuickSalePage() {
                   <input value={shortcutForm.vatRate} onChange={(e) => setShortcutForm({ ...shortcutForm, vatRate: e.target.value })} placeholder="KDV %" className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
                   <input value={shortcutForm.stockQuantity} onChange={(e) => setShortcutForm({ ...shortcutForm, stockQuantity: e.target.value })} placeholder="Stok" className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
                 </div>
-                <label className="block text-[11px] text-slate-400">
-                  Dosyadan resim seç
-                  <input type="file" accept="image/*" className="mt-1 block w-full text-xs" onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    const reader = new FileReader()
-                    reader.onload = () => setShortcutForm((prev) => ({ ...prev, imageUrl: String(reader.result || '') }))
-                    reader.readAsDataURL(file)
-                  }} />
-                </label>
-                {shortcutForm.imageUrl && <img src={shortcutForm.imageUrl} alt="" className="h-16 w-16 object-cover rounded-xl" />}
                 {shortcutError && <p className="text-xs text-red-300">{shortcutError}</p>}
                 <button type="submit" className="w-full py-2.5 rounded-xl bg-emerald-600 font-black">Kaydet ve tuşa ekle</button>
               </form>
             )}
+            <div className="rounded-2xl border border-slate-700 bg-slate-950 p-3 space-y-2">
+              <div className="text-[11px] font-bold text-slate-300">Ürün görseli <span className="text-emerald-300">Otomatik / Yükle</span></div>
+              <div className="flex items-center gap-2">
+                {(shortcutMode === 'new' ? shortcutForm.imageUrl : (imageTarget && productImage(imageTarget))) ? (
+                  <img src={shortcutMode === 'new' ? shortcutForm.imageUrl : productImage(imageTarget)} alt="" className="h-16 w-16 rounded-xl object-cover border border-emerald-500/40" />
+                ) : (
+                  <div className="h-16 w-16 rounded-xl border border-dashed border-slate-600 flex items-center justify-center text-[10px] text-slate-400 text-center">Görsel yok</div>
+                )}
+                <div className="flex-1 space-y-1.5">
+                  <div className="flex gap-1.5">
+                    <button type="button" disabled={imageBusy} onClick={() => findShortcutImage(shortcutMode === 'new' ? shortcutForm.name : (imageTarget?.name || shortcutSearch), (url) => {
+                      if (shortcutMode === 'new') setShortcutForm((prev) => ({ ...prev, imageUrl: url }))
+                      else if (imageTarget) saveImage(imageTarget.id, url)
+                    })} className="flex-1 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-bold">{imageBusy ? 'Aranıyor...' : 'Otomatik resim bul'}</button>
+                    <a className="py-1.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-bold" target="_blank" rel="noreferrer" href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(((shortcutMode === 'new' ? shortcutForm.name : (imageTarget?.name || shortcutSearch)) || 'ürün') + ' ürün')}`}>Google'da ara</a>
+                  </div>
+                  <label className="block text-[10px] text-slate-400">
+                    Dosya seç
+                    <input type="file" accept="image/*" className="mt-1 block w-full text-[10px]" onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (!file) return
+                      const reader = new FileReader()
+                      reader.onload = () => {
+                        const url = String(reader.result || '')
+                        if (shortcutMode === 'new') setShortcutForm((prev) => ({ ...prev, imageUrl: url }))
+                        else if (imageTarget) saveImage(imageTarget.id, url)
+                        else setImageNote('Önce listeden bir ürün seç.')
+                      }
+                      reader.readAsDataURL(file)
+                    }} />
+                  </label>
+                </div>
+              </div>
+              {imageNote && <p className="text-[11px] text-emerald-300">{imageNote}</p>}
+              <div className="text-[10px] text-slate-400">Hazır görsel</div>
+              <div className="grid grid-cols-6 gap-1.5">
+                {READY_IMAGES.map((preset) => (
+                  <button key={preset.label} type="button" title={preset.label} onClick={() => {
+                    if (shortcutMode === 'new') setShortcutForm((prev) => ({ ...prev, imageUrl: preset.url }))
+                    else if (imageTarget) saveImage(imageTarget.id, preset.url)
+                    else setImageNote('Önce listeden bir ürün seç.')
+                  }} className="h-10 rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+                    <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
