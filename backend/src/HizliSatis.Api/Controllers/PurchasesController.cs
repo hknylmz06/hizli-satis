@@ -70,7 +70,7 @@ public class PurchasesController(TenantDbContextFactory tenantDbFactory) : Contr
             var product = products.First(p => p.Id == line.ProductId);
             var productVariants = variants.Where(v => v.ProductId == product.Id).ToList();
             ProductVariant? variant = null;
-            if (line.VariantId is Guid variantId)
+            if (line.VariantId is int variantId)
             {
                 variant = productVariants.FirstOrDefault(v => v.Id == variantId);
                 if (variant is null)

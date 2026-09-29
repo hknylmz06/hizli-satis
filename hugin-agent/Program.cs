@@ -192,6 +192,7 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
 
         var documentId = start.DocumentId!;
         var paymentType = MapPayment(request.PaymentMethod);
+        var payments = SplitPayments(request);
 
         // Hugin S1 PUT: sadece name + vatRate + amount (eski köprü formatı)
         var items = request.Items.Select(i =>
@@ -215,14 +216,16 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
         var finalizePayload = new
         {
             items,
-            payments = new[]
-            {
-                new
+            payments = payments.Count > 0
+                ? payments
+                : new List<object>
                 {
-                    type = paymentType,
-                    amount = payAmount.ToString("0.00", CultureInfo.InvariantCulture)
+                    new
+                    {
+                        type = paymentType,
+                        amount = payAmount.ToString("0.00", CultureInfo.InvariantCulture)
+                    }
                 }
-            }
         };
 
         using var finReq = CreateRequest(HttpMethod.Put, $"{baseUrl}/v1/documents/{documentId}", request.SoftwareId, request.SerialNo, request.HardwareId);
@@ -377,6 +380,18 @@ static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? s
     if (!string.IsNullOrWhiteSpace(hardwareId))
         req.Headers.TryAddWithoutValidation("X-HardwareId", hardwareId);
     return req;
+}
+
+static List<object> SplitPayments(SalePrintRequest request)
+{
+    var cash = request.CashAmount.GetValueOrDefault();
+    var card = request.CardAmount.GetValueOrDefault();
+    if (cash <= 0 || card <= 0) return [];
+    return
+    [
+        new { type = "CASH", amount = cash.ToString("0.00", CultureInfo.InvariantCulture) },
+        new { type = "EFT_POS", amount = card.ToString("0.00", CultureInfo.InvariantCulture) }
+    ];
 }
 
 static string MapPayment(string? method) => method?.Trim().ToLowerInvariant() switch
@@ -586,6 +601,8 @@ sealed class SalePrintRequest : DeviceIdentity
     public string? SoftwareId { get; set; }
     public string? HardwareId { get; set; }
     public string? PaymentMethod { get; set; }
+    public decimal? CashAmount { get; set; }
+    public decimal? CardAmount { get; set; }
     public decimal GrandTotal { get; set; }
     public string? ReferenceCode { get; set; }
     public List<SalePrintItem> Items { get; set; } = [];

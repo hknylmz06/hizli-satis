@@ -13,7 +13,7 @@ public class TenantResolutionMiddleware(RequestDelegate next)
         var firmaKodu = context.User.FindFirstValue("firma_kodu");
         var tenantIdClaim = context.User.FindFirstValue("tenant_id");
 
-        if (!string.IsNullOrWhiteSpace(firmaKodu) && Guid.TryParse(tenantIdClaim, out var tenantId))
+        if (!string.IsNullOrWhiteSpace(firmaKodu) && int.TryParse(tenantIdClaim, out var tenantId))
         {
             var tenant = await masterDb.Tenants.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == tenantId && t.FirmaKodu == firmaKodu);

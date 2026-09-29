@@ -48,8 +48,8 @@ public class DefinitionsController(TenantDbContextFactory tenantDbFactory) : Con
         return Ok(new { item.Id, item.Name, item.Color, item.VatRate });
     }
 
-    [HttpDelete("departments/{id:guid}")]
-    public async Task<IActionResult> DeleteDepartment(Guid id, CancellationToken ct)
+    [HttpDelete("departments/{id:int}")]
+    public async Task<IActionResult> DeleteDepartment(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var item = await db.Departments.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -90,8 +90,8 @@ public class DefinitionsController(TenantDbContextFactory tenantDbFactory) : Con
         return Ok(new { item.Id, item.Name });
     }
 
-    [HttpDelete("sizes/{id:guid}")]
-    public async Task<IActionResult> DeleteSize(Guid id, CancellationToken ct)
+    [HttpDelete("sizes/{id:int}")]
+    public async Task<IActionResult> DeleteSize(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         if (await db.VariantOptions.AnyAsync(v => v.SizeOptionId == id, ct))
@@ -136,8 +136,8 @@ public class DefinitionsController(TenantDbContextFactory tenantDbFactory) : Con
         return Ok(new { item.Id, item.Name, item.Hex });
     }
 
-    [HttpDelete("colors/{id:guid}")]
-    public async Task<IActionResult> DeleteColor(Guid id, CancellationToken ct)
+    [HttpDelete("colors/{id:int}")]
+    public async Task<IActionResult> DeleteColor(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         if (await db.VariantOptions.AnyAsync(v => v.ColorOptionId == id, ct))
@@ -185,8 +185,8 @@ public class DefinitionsController(TenantDbContextFactory tenantDbFactory) : Con
         return Ok(new { item.Id, item.SizeOptionId, item.ColorOptionId, SizeName = size.Name, ColorName = color.Name, ColorHex = color.Hex });
     }
 
-    [HttpDelete("variants/{id:guid}")]
-    public async Task<IActionResult> DeleteVariant(Guid id, CancellationToken ct)
+    [HttpDelete("variants/{id:int}")]
+    public async Task<IActionResult> DeleteVariant(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var item = await db.VariantOptions.FirstOrDefaultAsync(x => x.Id == id, ct);

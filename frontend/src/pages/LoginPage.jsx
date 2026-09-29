@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShoppingCart, Lock, User, AlertCircle, ArrowRight, ShieldCheck, Building2 } from 'lucide-react'
+import { ShoppingCart, Lock, User, AlertCircle, ArrowRight, Building2 } from 'lucide-react'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import DatabaseServerPanel from './DatabaseServerPanel'
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSql, setShowSql] = useState(false)
+  const localHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 
   useEffect(() => {
     const notice = sessionStorage.getItem('hizlisatis_auth_notice')
@@ -66,7 +67,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Hızlı Satış POS</h1>
-            <p className="text-xs text-slate-400 mt-1">Barkodlu satış ve yazarkasa</p>
+            <p className="text-xs text-slate-400 mt-1">Firma kodu ve kullanıcı adınla gir</p>
           </div>
         </div>
 
@@ -112,21 +113,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-slate-800 text-[11px] text-slate-400 space-y-1 bg-slate-950/40 p-3 rounded-xl">
-          <div className="flex items-center gap-1 text-slate-300 font-semibold">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Platform yöneticisi</span>
-          </div>
-          <div className="font-mono text-emerald-400">admin / Admin123!</div>
-        </div>
-
-        <button type="button" onClick={() => setShowSql((v) => !v)} className="mt-4 text-xs text-slate-500 hover:text-slate-300">
-          {showSql ? 'SQL ayarını gizle' : 'SQL Server ayarı (yerel)'}
-        </button>
-        {showSql && (
-          <div className="mt-3 legacy-page">
-            <DatabaseServerPanel />
-          </div>
+        {localHost && (
+          <>
+            <button type="button" onClick={() => setShowSql((v) => !v)} className="mt-4 text-xs text-slate-500 hover:text-slate-300">
+              {showSql ? 'SQL ayarını gizle' : 'SQL Server ayarı (yerel)'}
+            </button>
+            {showSql && (
+              <div className="mt-3 legacy-page">
+                <DatabaseServerPanel />
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

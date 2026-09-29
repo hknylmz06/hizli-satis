@@ -79,8 +79,8 @@ public class SuppliersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(supplier, 0, 0));
     }
 
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] SaveSupplierRequest request, CancellationToken ct)
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] SaveSupplierRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest(new { message = "Tedarikçi adı zorunlu." });
@@ -97,8 +97,8 @@ public class SuppliersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(supplier, 0, 0));
     }
 
-    [HttpPost("{id:guid}/debt")]
-    public async Task<IActionResult> AddDebt(Guid id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
+    [HttpPost("{id:int}/debt")]
+    public async Task<IActionResult> AddDebt(int id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
     {
         if (request.Amount <= 0)
             return BadRequest(new { message = "Borç tutarı 0'dan büyük olmalı." });
@@ -121,8 +121,8 @@ public class SuppliersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(supplier, 0, 0));
     }
 
-    [HttpPost("{id:guid}/payments")]
-    public async Task<IActionResult> AddPayment(Guid id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
+    [HttpPost("{id:int}/payments")]
+    public async Task<IActionResult> AddPayment(int id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
     {
         if (request.Amount <= 0)
             return BadRequest(new { message = "Ödeme tutarı 0'dan büyük olmalı." });
@@ -149,8 +149,8 @@ public class SuppliersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(supplier, 0, 0));
     }
 
-    [HttpGet("{id:guid}/statement")]
-    public async Task<IActionResult> Statement(Guid id, CancellationToken ct)
+    [HttpGet("{id:int}/statement")]
+    public async Task<IActionResult> Statement(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var supplier = await db.Suppliers.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
@@ -186,7 +186,7 @@ public class SuppliersController(TenantDbContextFactory tenantDbFactory) : Contr
                 type = kind,
                 amount = move.Amount,
                 note = move.Note,
-                accountName = move.AccountId is Guid accountId && accountNames.TryGetValue(accountId, out var accountName) ? accountName : null,
+                accountName = move.AccountId is int accountId && accountNames.TryGetValue(accountId, out var accountName) ? accountName : null,
                 runningBalance = Math.Round(running, 2)
             });
         }

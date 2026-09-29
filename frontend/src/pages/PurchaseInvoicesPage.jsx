@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
 
@@ -21,6 +21,7 @@ export default function PurchaseInvoicesPage() {
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const quantityRef = useRef(null)
 
   async function load() {
     const token = session.token
@@ -47,17 +48,40 @@ export default function PurchaseInvoicesPage() {
     if (!query) return true
     return product.name.toLowerCase().includes(query) || (product.barcode || '').toLowerCase().includes(query)
   })
-  const selected = products.find((p) => p.id === line.productId)
+  const selected = products.find((p) => String(p.id) === String(line.productId))
   const variants = selected?.variants || []
+
+  function pickProduct(product) {
+    setLine({
+      ...emptyLine,
+      productId: String(product.id),
+      unitCost: product.purchasePrice ?? ''
+    })
+    setError('')
+  }
+
+  function matchBarcode(value) {
+    const term = value.trim().toLowerCase()
+    if (!term) return null
+    return products.find((product) => (product.barcode || '').trim().toLowerCase() === term) || null
+  }
 
   function searchProduct(value) {
     setProductQuery(value)
-    const term = value.trim().toLowerCase()
-    if (!term) return
-    const exact = products.find((product) => (product.barcode || '').toLowerCase() === term)
-    if (exact) {
-      setLine({ ...emptyLine, productId: exact.id, unitCost: exact.purchasePrice ?? '' })
+    const exact = matchBarcode(value)
+    if (exact) pickProduct(exact)
+  }
+
+  function onBarcodeKey(event) {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    const exact = matchBarcode(productQuery)
+    if (!exact) {
+      setError('Bu barkod stokta yok.')
+      return
     }
+    pickProduct(exact)
+    quantityRef.current?.focus()
   }
 
   function addLine(e) {
@@ -72,7 +96,7 @@ export default function PurchaseInvoicesPage() {
       setError('Miktar gir.')
       return
     }
-    const variant = variants.find((v) => v.id === line.variantId)
+    const variant = variants.find((v) => String(v.id) === String(line.variantId))
     const name = variant
       ? `${selected.name} · ${[variant.sizeName, variant.colorName].filter(Boolean).join(' ')}`
       : selected.name
@@ -160,15 +184,16 @@ export default function PurchaseInvoicesPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">
           <label>Barkod veya ad
-            <input value={productQuery} onChange={(e) => searchProduct(e.target.value)} placeholder="Barkod okut veya ad yaz" />
+            <input value={productQuery} onChange={(e) => searchProduct(e.target.value)} onKeyDown={onBarcodeKey} placeholder="Barkod okut veya ad yaz" autoComplete="off" />
           </label>
           <label className="sm:col-span-2">Ürün
             <select value={line.productId} onChange={(e) => {
-              const product = products.find((item) => item.id === e.target.value)
-              setLine({ ...emptyLine, productId: e.target.value, unitCost: product?.purchasePrice ?? '' })
+              const product = products.find((item) => String(item.id) === e.target.value)
+              if (product) pickProduct(product)
+              else setLine(emptyLine)
             }}>
               <option value="">Seç</option>
-              {filteredProducts.map((p) => <option key={p.id} value={p.id}>{p.name}{p.barcode ? ` · ${p.barcode}` : ''}</option>)}
+              {filteredProducts.map((p) => <option key={p.id} value={String(p.id)}>{p.name}{p.barcode ? ` · ${p.barcode}` : ''}</option>)}
             </select>
           </label>
           {variants.length > 0 && (
@@ -176,12 +201,12 @@ export default function PurchaseInvoicesPage() {
               <select value={line.variantId} onChange={(e) => setLine({ ...line, variantId: e.target.value })}>
                 <option value="">Seç</option>
                 {variants.map((v) => (
-                  <option key={v.id} value={v.id}>{[v.sizeName, v.colorName].filter(Boolean).join(' · ')}</option>
+                  <option key={v.id} value={String(v.id)}>{[v.sizeName, v.colorName].filter(Boolean).join(' · ')}</option>
                 ))}
               </select>
             </label>
           )}
-          <label>Miktar<input type="number" step="any" min="0" value={line.quantity} onChange={(e) => setLine({ ...line, quantity: e.target.value })} /></label>
+          <label>Miktar<input ref={quantityRef} type="number" step="any" min="0" value={line.quantity} onChange={(e) => setLine({ ...line, quantity: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} /></label>
           <label>Alış ₺<input type="number" step="0.01" min="0" value={line.unitCost} onChange={(e) => setLine({ ...line, unitCost: e.target.value })} /></label>
           <button type="button" className="primary" onClick={addLine}>Satır ekle</button>
         </div>

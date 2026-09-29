@@ -41,7 +41,12 @@ public sealed class SqlServerSettingsStore
 
     public SqlServerSettings Get()
     {
-        lock (_gate) return Clone(_current);
+        lock (_gate)
+        {
+            var copy = Clone(_current);
+            ApplyEnvironment(copy);
+            return Normalize(copy);
+        }
     }
 
     public string MasterConnectionString() => Build(Get(), Get().MasterDatabase);
@@ -119,6 +124,38 @@ public sealed class SqlServerSettingsStore
         return new MasterDbContext(options);
     }
 
+    private static void ApplyEnvironment(SqlServerSettings settings)
+    {
+        var server = FirstEnv("SqlServer__Server", "SQL_SERVER");
+        var portRaw = FirstEnv("SqlServer__Port", "SQL_PORT");
+        var database = FirstEnv("SqlServer__MasterDatabase", "SQL_MASTER_DATABASE");
+        var user = FirstEnv("SqlServer__User", "SQL_USER");
+        var password = FirstEnv("SqlServer__Password", "SQL_PASSWORD");
+
+        if (!string.IsNullOrWhiteSpace(server))
+            settings.Server = server.Trim();
+        if (int.TryParse(portRaw, out var port) && port is >= 1 and <= 65535)
+            settings.Port = port;
+        if (!string.IsNullOrWhiteSpace(database))
+            settings.MasterDatabase = database.Trim();
+        if (!string.IsNullOrWhiteSpace(user))
+            settings.User = user.Trim();
+        if (!string.IsNullOrWhiteSpace(password))
+            settings.Password = password;
+    }
+
+    private static string? FirstEnv(params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
+    }
+
     private SqlServerSettings Load()
     {
         try
@@ -152,7 +189,7 @@ public sealed class SqlServerSettingsStore
             InitialCatalog = database,
             TrustServerCertificate = true,
             Encrypt = true,
-            ConnectTimeout = 8
+            ConnectTimeout = 30
         };
 
         if (string.IsNullOrWhiteSpace(settings.User))

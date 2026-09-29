@@ -63,8 +63,8 @@ public class UsersController(TenantDbContextFactory tenantDbFactory) : Controlle
         return Ok(Map(user));
     }
 
-    [HttpPut("{id:guid}/permissions")]
-    public async Task<IActionResult> UpdatePermissions(Guid id, [FromBody] UpdateUserPermissionsRequest request, CancellationToken ct)
+    [HttpPut("{id:int}/permissions")]
+    public async Task<IActionResult> UpdatePermissions(int id, [FromBody] UpdateUserPermissionsRequest request, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var actor = await Current(db, ct);
@@ -88,8 +88,8 @@ public class UsersController(TenantDbContextFactory tenantDbFactory) : Controlle
         return Ok(Map(user));
     }
 
-    [HttpPost("{id:guid}/toggle")]
-    public async Task<IActionResult> Toggle(Guid id, CancellationToken ct)
+    [HttpPost("{id:int}/toggle")]
+    public async Task<IActionResult> Toggle(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var actor = await Current(db, ct);
@@ -112,8 +112,8 @@ public class UsersController(TenantDbContextFactory tenantDbFactory) : Controlle
         return Ok(Map(user));
     }
 
-    [HttpPost("{id:guid}/reset-password")]
-    public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetPasswordRequest request, CancellationToken ct)
+    [HttpPost("{id:int}/reset-password")]
+    public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest request, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var actor = await Current(db, ct);
@@ -130,8 +130,8 @@ public class UsersController(TenantDbContextFactory tenantDbFactory) : Controlle
         return Ok(new { message = "Şifre güncellendi." });
     }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var actor = await Current(db, ct);

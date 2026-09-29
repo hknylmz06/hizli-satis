@@ -19,11 +19,52 @@ public static class FifoStock
             db.StockBatches.Add(Batch(product.Id, null, product.StockQuantity, product.PurchasePrice, "Acilis", product.CreatedAt, null));
     }
 
+    public static async Task AdjustOnHandAsync(
+        TenantDbContext db,
+        int productId,
+        int? variantId,
+        decimal previous,
+        decimal current,
+        decimal unitCost,
+        CancellationToken ct)
+    {
+        if (productId <= 0 || current == previous) return;
+
+        var hasBatch = await db.StockBatches.AnyAsync(
+            b => b.ProductId == productId && b.VariantId == variantId && b.RemainingQuantity > 0, ct);
+        if (!hasBatch)
+        {
+            if (current > 0)
+                db.StockBatches.Add(Batch(productId, variantId, current, unitCost, "Acilis", DateTime.UtcNow, "Stok duzeltme"));
+            return;
+        }
+
+        var delta = current - previous;
+        if (delta > 0)
+        {
+            db.StockBatches.Add(Batch(productId, variantId, delta, unitCost, "Acilis", DateTime.UtcNow, "Stok duzeltme"));
+            return;
+        }
+
+        var left = -delta;
+        var batches = await db.StockBatches
+            .Where(b => b.ProductId == productId && b.VariantId == variantId && b.RemainingQuantity > 0)
+            .OrderByDescending(b => b.PurchasedAt).ThenByDescending(b => b.Id)
+            .ToListAsync(ct);
+        foreach (var batch in batches)
+        {
+            if (left <= 0) break;
+            var take = Math.Min(batch.RemainingQuantity, left);
+            batch.RemainingQuantity -= take;
+            left -= take;
+        }
+    }
+
     public static async Task<decimal> ConsumeAsync(
         TenantDbContext db,
         SaleItem item,
         Product product,
-        Guid? variantId,
+        int? variantId,
         decimal onHand,
         CancellationToken ct)
     {
@@ -75,7 +116,7 @@ public static class FifoStock
         return Math.Round(cost, 2);
     }
 
-    public static async Task RestoreAsync(TenantDbContext db, IEnumerable<Guid> saleItemIds, CancellationToken ct)
+    public static async Task RestoreAsync(TenantDbContext db, IEnumerable<int> saleItemIds, CancellationToken ct)
     {
         var ids = saleItemIds.ToList();
         if (ids.Count == 0) return;
@@ -84,7 +125,7 @@ public static class FifoStock
         var batches = await db.StockBatches.Where(b => batchIds.Contains(b.Id)).ToListAsync(ct);
         foreach (var usage in usages)
         {
-            if (usage.StockBatchId is Guid batchId)
+            if (usage.StockBatchId is int batchId)
             {
                 var batch = batches.FirstOrDefault(b => b.Id == batchId);
                 if (batch is not null)
@@ -97,8 +138,8 @@ public static class FifoStock
     public static async Task ReceiveAsync(
         TenantDbContext db,
         StockBatch batch,
-        Guid productId,
-        Guid? variantId,
+        int productId,
+        int? variantId,
         CancellationToken ct)
     {
         var uncovered = await (
@@ -112,7 +153,7 @@ public static class FifoStock
             select usage).ToListAsync(ct);
 
         decimal left = batch.InitialQuantity;
-        var touchedItems = new HashSet<Guid>();
+        var touchedItems = new HashSet<int>();
         foreach (var usage in uncovered)
         {
             if (left <= 0) break;
@@ -143,7 +184,7 @@ public static class FifoStock
             await RecostAsync(db, touchedItems, ct);
     }
 
-    private static async Task RecostAsync(TenantDbContext db, HashSet<Guid> saleItemIds, CancellationToken ct)
+    private static async Task RecostAsync(TenantDbContext db, HashSet<int> saleItemIds, CancellationToken ct)
     {
         var items = await db.SaleItems.Where(i => saleItemIds.Contains(i.Id)).ToListAsync(ct);
         var usages = await db.SaleItemBatchUsages.Where(u => saleItemIds.Contains(u.SaleItemId)).ToListAsync(ct);
@@ -160,7 +201,7 @@ public static class FifoStock
             sale.CostTotal = Math.Round(sale.Items.Sum(i => i.PurchasePrice * i.Quantity), 2);
     }
 
-    private static StockBatch Batch(Guid productId, Guid? variantId, decimal quantity, decimal unitCost, string source, DateTime purchasedAt, string? note) =>
+    private static StockBatch Batch(int productId, int? variantId, decimal quantity, decimal unitCost, string source, DateTime purchasedAt, string? note) =>
         new()
         {
             ProductId = productId,

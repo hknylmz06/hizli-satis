@@ -81,7 +81,6 @@ export default function QuickSalePage() {
   const [paidAmount, setPaidAmount] = useState('')
   const [splitOpen, setSplitOpen] = useState(false)
   const [splitCash, setSplitCash] = useState('')
-  const [splitCard, setSplitCard] = useState('')
   const [deptAmount, setDeptAmount] = useState('')
   const [askCustomer, setAskCustomer] = useState(false)
   const [shortcuts, setShortcuts] = useState(() => {
@@ -117,7 +116,15 @@ export default function QuickSalePage() {
   }
 
   useEffect(() => {
-    api('/api/products', { token: session.token }).then(setProducts).catch(() => {})
+    api('/api/products', { token: session.token }).then((list) => {
+      const rows = Array.isArray(list) ? list : []
+      setProducts(rows)
+      try {
+        const stored = JSON.parse(localStorage.getItem('pos-images') || '{}')
+        const pending = Object.entries(stored).filter(([id, url]) => url && rows.some((product) => String(product.id).toLowerCase() === String(id).toLowerCase()) && !rows.find((product) => String(product.id).toLowerCase() === String(id).toLowerCase())?.image)
+        pending.forEach(([id, url]) => saveImage(id, url).catch(() => {}))
+      } catch { /* eski tarayıcı resmi okunamadı */ }
+    }).catch(() => {})
     api('/api/categories', { token: session.token }).then((list) => {
       const rows = Array.isArray(list) ? list : []
       setCategories(rows)
@@ -294,13 +301,36 @@ export default function QuickSalePage() {
   }
 
   function productImage(product) {
-    return images[product.id] || presetImage(product.name)
+    return images[product.id] || product.image || presetImage(product.name)
   }
 
-  function saveImage(productId, url) {
-    const next = { ...images, [productId]: url }
-    setImages(next)
-    localStorage.setItem('pos-images', JSON.stringify(next))
+  async function shrinkImage(url) {
+    if (!url || !url.startsWith('data:image')) return url
+    const img = new Image()
+    const loaded = await new Promise((resolve) => {
+      img.onload = () => resolve(true)
+      img.onerror = () => resolve(false)
+      img.src = url
+    })
+    if (!loaded) return url
+    const max = 320
+    const scale = Math.min(1, max / Math.max(img.width, img.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(img.width * scale))
+    canvas.height = Math.max(1, Math.round(img.height * scale))
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.72)
+  }
+
+  async function saveImage(productId, url) {
+    const image = await shrinkImage(url)
+    await api(`/api/products/${productId}/image`, { method: 'PUT', token: session.token, body: { image } })
+    setImages((prev) => ({ ...prev, [productId]: image }))
+    setProducts((prev) => prev.map((product) => (sameId(product.id, productId) ? { ...product, image } : product)))
+    const stored = JSON.parse(localStorage.getItem('pos-images') || '{}')
+    delete stored[productId]
+    if (Object.keys(stored).length === 0) localStorage.removeItem('pos-images')
+    else localStorage.setItem('pos-images', JSON.stringify(stored))
   }
 
   function chooseProduct(product) {
@@ -460,7 +490,7 @@ export default function QuickSalePage() {
     setDeptAmount('')
   }
 
-  async function printFiscalReceipt(saleResult, cartSnapshot, payMethod, payable) {
+  async function printFiscalReceipt(saleResult, cartSnapshot, payMethod, payable, split) {
     if (!fiscal?.isEnabled || !fiscal?.isPaired || !fiscal?.deviceHost) return { skipped: true }
     const agentBase = (fiscal.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
     try {
@@ -481,6 +511,8 @@ export default function QuickSalePage() {
           softwareId: fiscal.softwareId || null,
           hardwareId: fiscal.hardwareId || null,
           paymentMethod: payMethod,
+          cashAmount: split?.cash ?? null,
+          cardAmount: split?.card ?? null,
           grandTotal: payable,
           referenceCode: saleResult.receiptNo,
           items: cartSnapshot.map((item) => {
@@ -506,7 +538,7 @@ export default function QuickSalePage() {
     return value.includes('vazgeç') || value.includes('vazgec')
   }
 
-  async function checkout(method) {
+  async function checkout(method, split) {
     const payMethod = method || paymentMethod
     setPaymentMethod(payMethod)
     if (!cart.length || busy) return
@@ -535,14 +567,16 @@ export default function QuickSalePage() {
             : { productId: item.productId, variantId: item.variantId || null, quantity: item.quantity })),
           paymentMethod: payMethod,
           customerId: payMethod === 'Veresiye' ? customerId || null : null,
-          discountAmount
+          discountAmount,
+          cashAmount: split?.cash ?? null,
+          cardAmount: split?.card ?? null
         }
       })
       setCart([])
       setBarcode('')
       setPaidAmount('')
       setDiscount('')
-      const fiscalResult = await printFiscalReceipt(result, cartSnapshot, payMethod, payable)
+      const fiscalResult = await printFiscalReceipt(result, cartSnapshot, payMethod, payable, split)
       if (isFiscalCancel(fiscalResult?.message)) {
         try {
           await api(`/api/sales/${result.id}/void`, { method: 'POST', token: session.token })
@@ -555,6 +589,7 @@ export default function QuickSalePage() {
         }
       } else {
         let msg = `Satış tamam: ${result.receiptNo} — ${Number(result.grandTotal).toFixed(2)} ₺`
+        if (payMethod === 'Parcali') msg += ` | Nakit ${money(result.cashAmount)} · POS ${money(result.cardAmount)}`
         if (fiscalResult?.ok) msg += fiscalResult.receiptNo ? ` | Yazarkasa fiş: ${fiscalResult.receiptNo}` : ' | Fiş basıldı'
         else if (fiscalResult?.message) setError(fiscalResult.message)
         setMessage(msg)
@@ -585,23 +620,31 @@ export default function QuickSalePage() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  function moneyInput(value) {
+    const n = Number(String(value ?? '').trim().replace(',', '.'))
+    return Number.isFinite(n) ? n : 0
+  }
+
   function openSplit() {
     if (!cart.length) return
-    setSplitCash(total.toFixed(2))
-    setSplitCard('0')
+    setSplitCash('')
+    setError('')
     setSplitOpen(true)
   }
 
   function confirmSplit() {
-    const cash = Number(splitCash || 0)
-    const card = Number(splitCard || 0)
-    if (Math.abs(cash + card - total) > 0.05) {
-      setError('Parçalı ödeme nakit + kart olarak sepet tutarına eşit olmalı.')
+    const cash = Math.round(moneyInput(splitCash) * 100) / 100
+    const card = Math.round((total - cash) * 100) / 100
+    if (cash <= 0 || card <= 0) {
+      setError('Nakit tutarı yaz. Kalan kendiliğinden POS’a geçer.')
       return
     }
     setSplitOpen(false)
-    checkout(card > cash ? 'KrediKarti' : 'Nakit')
+    checkout('Parcali', { cash, card })
   }
+
+  const splitCashValue = moneyInput(splitCash)
+  const splitCardValue = Math.max(0, Math.round((total - splitCashValue) * 100) / 100)
 
   const priceLook = fiscal && !fiscal.isPaired
 
@@ -1121,8 +1164,13 @@ export default function QuickSalePage() {
           <div className="w-[360px] bg-slate-900 border border-purple-500/40 rounded-3xl p-5 space-y-3">
             <div className="font-black text-lg">Parçalı ödeme</div>
             <div className="text-emerald-300 font-mono text-2xl">{money(total)}</div>
-            <label className="block text-xs text-slate-400">Nakit<input value={splitCash} onChange={(e) => setSplitCash(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></label>
-            <label className="block text-xs text-slate-400">Kart<input value={splitCard} onChange={(e) => setSplitCard(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></label>
+            <label className="block text-xs text-slate-400">Nakit
+              <input autoFocus inputMode="decimal" value={splitCash} onChange={(e) => setSplitCash(e.target.value)} placeholder="Örn: 1" className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono" />
+            </label>
+            <div className="rounded-xl border border-blue-500/40 bg-blue-950/40 px-3 py-2">
+              <div className="text-xs text-slate-400">POS kalan</div>
+              <div className="font-mono text-xl font-black text-blue-200">{money(splitCardValue)}</div>
+            </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setSplitOpen(false)} className="flex-1 py-2 rounded-xl border border-slate-700">Vazgeç</button>
               <button type="button" onClick={confirmSplit} className="flex-1 py-2 rounded-xl bg-purple-600 font-bold">Tamamla</button>

@@ -237,14 +237,42 @@ export default function ProductsPage() {
     setShowModal(true)
   }
 
+  function amount(value) {
+    const n = Number(String(value ?? '').trim().replace(',', '.'))
+    return Number.isFinite(n) ? n : null
+  }
+
   async function saveProduct(e) {
     e.preventDefault()
+    const salePrice = amount(form.salePrice)
+    const stockQuantity = amount(form.stockQuantity)
+    const purchasePrice = amount(form.purchasePrice)
+    if (!form.name.trim()) {
+      setError('Ürün adı gerekli.')
+      return
+    }
+    if (salePrice === null || salePrice < 0) {
+      setError('Satış fiyatı sayı olmalı.')
+      return
+    }
+    if (!form.hasVariants && form.stockQuantity !== '' && stockQuantity === null) {
+      setError('Stok adedi sayı olmalı. Ondalık için virgül ya da nokta kullan.')
+      return
+    }
+    if (form.hasVariants && variantRows.some((row) => (row.size || row.color) && amount(row.stock) === null && String(row.stock ?? '').trim() !== '')) {
+      setError('Varyant stoğu sayı olmalı.')
+      return
+    }
+    if (form.hasVariants && variantRows.length > 0 && variantRows.every((row) => !row.size && !row.color)) {
+      setError('Stok satırı için beden veya renk seç.')
+      return
+    }
     await run(async () => {
       const lines = form.hasVariants
         ? variantRows.filter((row) => row.size || row.color).map((row) => ({
             size: row.size,
             color: row.color,
-            stockQuantity: Number(row.stock || 0)
+            stockQuantity: amount(row.stock) || 0
           }))
         : []
       const saved = await api(editingId ? `/api/products/${editingId}` : '/api/products', {
@@ -254,10 +282,10 @@ export default function ProductsPage() {
           name: form.name.trim(),
           barcode: form.barcode.trim(),
           categoryId: form.categoryId || null,
-          purchasePrice: Number(form.purchasePrice || 0),
-          salePrice: Number(form.salePrice || 0),
-          vatRate: Number(form.vatRate),
-          stockQuantity: form.hasVariants ? 0 : Number(form.stockQuantity || 0),
+          purchasePrice: purchasePrice || 0,
+          salePrice,
+          vatRate: amount(form.vatRate) || 0,
+          stockQuantity: form.hasVariants ? 0 : (stockQuantity || 0),
           criticalStockLevel: Number(form.criticalStockLevel || 0),
           unit: form.unit,
           originCountry: form.originCountry,
@@ -561,7 +589,7 @@ export default function ProductsPage() {
                 </label>
                 <label>
                   Satış Fiyatı (₺) *
-                  <input type="number" step="0.01" required className="text-center text-emerald-400 font-bold font-mono" value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: e.target.value })} placeholder="0.00" />
+                  <input type="text" inputMode="decimal" required className="text-center text-emerald-400 font-bold font-mono" value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: e.target.value })} placeholder="0.00" />
                 </label>
               </div>
 
@@ -654,7 +682,7 @@ export default function ProductsPage() {
                       <div key={index} className="flex items-center gap-2">
                         <input className="text-center" value={row.size} onChange={(e) => setVariantRows(variantRows.map((item, i) => i === index ? { ...item, size: e.target.value } : item))} placeholder="Beden" />
                         <input className="text-center" value={row.color} onChange={(e) => setVariantRows(variantRows.map((item, i) => i === index ? { ...item, color: e.target.value } : item))} placeholder="Renk" />
-                        <input className="text-center font-mono text-emerald-400" type="number" value={row.stock} onChange={(e) => setVariantRows(variantRows.map((item, i) => i === index ? { ...item, stock: e.target.value } : item))} placeholder="Stok" />
+                        <input className="text-center font-mono text-emerald-400" type="text" inputMode="decimal" value={row.stock} onChange={(e) => setVariantRows(variantRows.map((item, i) => i === index ? { ...item, stock: e.target.value } : item))} placeholder="Stok" />
                         <button type="button" className="close-x" onClick={() => setVariantRows(variantRows.filter((_, i) => i !== index))} aria-label="Satırı sil">
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -666,11 +694,11 @@ export default function ProductsPage() {
 
               {!form.hasVariants && (
                 <div className="p-3 rounded-xl border border-slate-700 bg-slate-800/60 space-y-2">
-                  <span className="text-[11px] font-semibold text-slate-300">Başlangıç / Devir Stoku (Opsiyonel)</span>
-                  <p className="text-[11px] text-slate-400">Bu ilk parti. Sonraki mal girişi alış faturasıyla gelir; satışta önce bu maliyet biter.</p>
+                  <span className="text-[11px] font-semibold text-slate-300">Stok adedi</span>
+                  <p className="text-[11px] text-slate-400">Kart açılırken eldeki adet buraya yazılır. Sonraki mal girişi alış faturasıyla gelir.</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="number" step="any" placeholder="Devir Adedi (Örn: 20)" value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />
-                    <input type="number" step="0.01" placeholder="Birim Maliyet ₺ (Örn: 1.00)" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} />
+                    <input type="text" inputMode="decimal" placeholder="Adet (Örn: 20)" value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />
+                    <input type="text" inputMode="decimal" placeholder="Birim maliyet ₺" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} />
                   </div>
                 </div>
               )}

@@ -21,7 +21,8 @@ export async function api(path, { method = 'GET', body, token } = {}) {
     let message = res.status === 401 ? 'Oturumun doldu. Tekrar giriş yap.' : 'İstek başarısız'
     try {
       const data = await res.json()
-      message = data.message || data.title || message
+      const fieldError = data.errors ? Object.values(data.errors).flat().find(Boolean) : null
+      message = data.message || fieldError || data.title || message
     } catch {
       /* ignore */
     }

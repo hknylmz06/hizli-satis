@@ -41,8 +41,8 @@ public class AdminTenantsController(
         return Ok(items);
     }
 
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> Get(int id, CancellationToken ct)
     {
         var tenant = await masterDb.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tenant is null) return NotFound();
@@ -106,8 +106,8 @@ public class AdminTenantsController(
         }
     }
 
-    [HttpPost("{id:guid}/provision")]
-    public async Task<IActionResult> Provision(Guid id, CancellationToken ct)
+    [HttpPost("{id:int}/provision")]
+    public async Task<IActionResult> Provision(int id, CancellationToken ct)
     {
         var tenant = await provisioning.ProvisionAsync(id, ct);
         return Ok(new
@@ -121,8 +121,8 @@ public class AdminTenantsController(
         });
     }
 
-    [HttpPost("{id:guid}/renew-license")]
-    public async Task<IActionResult> RenewLicense(Guid id, CancellationToken ct)
+    [HttpPost("{id:int}/renew-license")]
+    public async Task<IActionResult> RenewLicense(int id, CancellationToken ct)
     {
         var tenant = await masterDb.Tenants.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tenant is null) return NotFound();

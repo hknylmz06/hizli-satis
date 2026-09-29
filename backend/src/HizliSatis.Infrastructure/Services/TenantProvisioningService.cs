@@ -51,7 +51,7 @@ public class TenantProvisioningService(
         return await masterDb.Tenants.AsNoTracking().FirstAsync(t => t.Id == tenant.Id, ct);
     }
 
-    public async Task<Tenant> ProvisionAsync(Guid tenantId, CancellationToken ct = default)
+    public async Task<Tenant> ProvisionAsync(int tenantId, CancellationToken ct = default)
     {
         var tenant = await masterDb.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
             ?? throw new InvalidOperationException("Firma bulunamadı.");

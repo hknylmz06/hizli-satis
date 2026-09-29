@@ -197,8 +197,8 @@ export default function ExpensesPage() {
       </section>
 
       {entryOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setEntryOpen(null)}>
-          <form className="panel w-full max-w-md space-y-3" onClick={(event) => event.stopPropagation()} onSubmit={(event) => saveEntry(event).catch((err) => setError(err.message))}>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+          <form className="panel w-full max-w-md space-y-3" onSubmit={(event) => saveEntry(event).catch((err) => setError(err.message))}>
             <h2>{entryOpen === 'income' ? 'Gelir ekle' : 'Gider ekle'}</h2>
             <label>Hesap
               <select value={form.accountId} onChange={(e) => setForm({ ...form, accountId: e.target.value })} required>

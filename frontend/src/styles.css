@@ -116,4 +116,40 @@
   .legacy-page .kpi-row > div { @apply bg-slate-900 border border-slate-800 rounded-2xl p-4; }
   .legacy-page .kpi-row span { @apply block text-xs text-slate-400; }
   .legacy-page .kpi-row strong { @apply text-xl text-white; }
+
+  .legacy-page .support-page {
+    @apply bg-[#e7eef6] text-slate-800 min-h-full p-4 lg:p-6;
+  }
+  .legacy-page .support-page h1 {
+    @apply text-2xl sm:text-3xl font-black text-slate-900 mb-2 tracking-tight;
+  }
+  .legacy-page .support-page h2 {
+    @apply text-base font-bold text-slate-900;
+  }
+  .legacy-page .support-page h3 {
+    @apply text-sm font-bold text-slate-900;
+  }
+  .legacy-page .support-page label {
+    @apply block text-xs font-semibold text-slate-600;
+  }
+  .legacy-page .support-page input,
+  .legacy-page .support-page select,
+  .legacy-page .support-page textarea {
+    @apply w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800;
+  }
+  .legacy-page .support-page textarea {
+    @apply min-h-[120px] resize-y;
+  }
+  .legacy-page .support-page button {
+    @apply border-0 bg-transparent text-inherit rounded-xl;
+  }
+  .legacy-page .support-page button.send-mail {
+    @apply inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 font-bold px-4 py-2.5 text-sm;
+  }
+  .legacy-page .support-page button.send-wa {
+    @apply inline-flex items-center gap-2 bg-emerald-600 text-white font-bold px-4 py-2.5 text-sm;
+  }
+  .legacy-page .support-page a.dl {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500;
+  }
 }

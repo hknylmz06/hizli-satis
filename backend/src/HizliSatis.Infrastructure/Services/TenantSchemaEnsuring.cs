@@ -52,7 +52,7 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'Categories', N'U') IS NULL
             BEGIN
                 CREATE TABLE [Categories] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(100) NOT NULL,
                     [Color] nvarchar(20) NOT NULL,
                     [CreatedAt] datetime2 NOT NULL,
@@ -61,7 +61,7 @@ public static class TenantSchemaEnsuring
                 CREATE UNIQUE INDEX [IX_Categories_Name] ON [Categories] ([Name]);
             END
             IF COL_LENGTH(N'Products', N'CategoryId') IS NULL
-                ALTER TABLE [Products] ADD [CategoryId] uniqueidentifier NULL;
+                ALTER TABLE [Products] ADD [CategoryId] int NULL;
             """,
             ct);
         }
@@ -76,12 +76,13 @@ public static class TenantSchemaEnsuring
         await Gate.WaitAsync(ct);
         try
         {
+        await IntIdMigration.ApplyAsync(db, ct);
         await db.Database.ExecuteSqlRawAsync(
             """
             IF OBJECT_ID(N'Departments', N'U') IS NULL
             BEGIN
                 CREATE TABLE [Departments] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(100) NOT NULL,
                     [Color] nvarchar(20) NOT NULL,
                     [VatRate] decimal(5,2) NOT NULL,
@@ -94,7 +95,7 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'SizeOptions', N'U') IS NULL
             BEGIN
                 CREATE TABLE [SizeOptions] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(40) NOT NULL,
                     [SortOrder] int NOT NULL,
                     [CreatedAt] datetime2 NOT NULL,
@@ -105,7 +106,7 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'ColorOptions', N'U') IS NULL
             BEGIN
                 CREATE TABLE [ColorOptions] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(40) NOT NULL,
                     [Hex] nvarchar(20) NOT NULL,
                     [SortOrder] int NOT NULL,
@@ -117,18 +118,18 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'VariantOptions', N'U') IS NULL
             BEGIN
                 CREATE TABLE [VariantOptions] (
-                    [Id] uniqueidentifier NOT NULL,
-                    [SizeOptionId] uniqueidentifier NOT NULL,
-                    [ColorOptionId] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [SizeOptionId] int NOT NULL,
+                    [ColorOptionId] int NOT NULL,
                     [CreatedAt] datetime2 NOT NULL,
                     CONSTRAINT [PK_VariantOptions] PRIMARY KEY ([Id])
                 );
                 CREATE UNIQUE INDEX [IX_VariantOptions_Size_Color] ON [VariantOptions] ([SizeOptionId], [ColorOptionId]);
             END
             IF COL_LENGTH(N'Products', N'CategoryId') IS NULL
-                ALTER TABLE [Products] ADD [CategoryId] uniqueidentifier NULL;
+                ALTER TABLE [Products] ADD [CategoryId] int NULL;
             IF COL_LENGTH(N'Products', N'DepartmentId') IS NULL
-                ALTER TABLE [Products] ADD [DepartmentId] uniqueidentifier NULL;
+                ALTER TABLE [Products] ADD [DepartmentId] int NULL;
             IF COL_LENGTH(N'Products', N'Unit') IS NULL
                 ALTER TABLE [Products] ADD [Unit] nvarchar(40) NULL;
             IF COL_LENGTH(N'Products', N'OriginCountry') IS NULL
@@ -139,6 +140,8 @@ public static class TenantSchemaEnsuring
                 ALTER TABLE [Products] ADD [UnitQty] decimal(18,3) NULL;
             IF COL_LENGTH(N'Products', N'UnitType') IS NULL
                 ALTER TABLE [Products] ADD [UnitType] nvarchar(40) NULL;
+            IF COL_LENGTH(N'Products', N'Image') IS NULL
+                ALTER TABLE [Products] ADD [Image] nvarchar(max) NULL;
             IF OBJECT_ID(N'Users', N'U') IS NOT NULL AND COL_LENGTH(N'Users', N'Permissions') IS NULL
                 ALTER TABLE [Users] ADD [Permissions] nvarchar(max) NULL;
             IF OBJECT_ID(N'Customers', N'U') IS NOT NULL AND COL_LENGTH(N'Customers', N'Email') IS NULL
@@ -152,7 +155,7 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'Suppliers', N'U') IS NULL
             BEGIN
                 CREATE TABLE [Suppliers] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(200) NOT NULL,
                     [Phone] nvarchar(40) NULL,
                     [Email] nvarchar(200) NULL,
@@ -167,8 +170,8 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'SupplierPayments', N'U') IS NULL
             BEGIN
                 CREATE TABLE [SupplierPayments] (
-                    [Id] uniqueidentifier NOT NULL,
-                    [SupplierId] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [SupplierId] int NOT NULL,
                     [Amount] decimal(18,2) NOT NULL,
                     [Kind] nvarchar(20) NULL,
                     [Note] nvarchar(400) NULL,
@@ -177,13 +180,13 @@ public static class TenantSchemaEnsuring
                 );
             END
             IF OBJECT_ID(N'SupplierPayments', N'U') IS NOT NULL AND COL_LENGTH(N'SupplierPayments', N'AccountId') IS NULL
-                ALTER TABLE [SupplierPayments] ADD [AccountId] uniqueidentifier NULL;
+                ALTER TABLE [SupplierPayments] ADD [AccountId] int NULL;
             IF OBJECT_ID(N'CustomerPayments', N'U') IS NOT NULL AND COL_LENGTH(N'CustomerPayments', N'AccountId') IS NULL
-                ALTER TABLE [CustomerPayments] ADD [AccountId] uniqueidentifier NULL;
+                ALTER TABLE [CustomerPayments] ADD [AccountId] int NULL;
             IF OBJECT_ID(N'CashAccounts', N'U') IS NULL
             BEGIN
                 CREATE TABLE [CashAccounts] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(120) NOT NULL,
                     [Type] nvarchar(20) NOT NULL,
                     [Balance] decimal(18,2) NOT NULL,
@@ -195,17 +198,17 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'CashAccounts', N'U') IS NOT NULL AND COL_LENGTH(N'CashAccounts', N'CommissionRate') IS NULL
                 ALTER TABLE [CashAccounts] ADD [CommissionRate] decimal(5,2) NOT NULL CONSTRAINT [DF_CashAccounts_Commission] DEFAULT 0;
             IF OBJECT_ID(N'SaleItems', N'U') IS NOT NULL AND COL_LENGTH(N'SaleItems', N'VariantId') IS NULL
-                ALTER TABLE [SaleItems] ADD [VariantId] uniqueidentifier NULL;
+                ALTER TABLE [SaleItems] ADD [VariantId] int NULL;
             IF OBJECT_ID(N'SaleItems', N'U') IS NOT NULL
                AND EXISTS (
                     SELECT 1 FROM sys.columns
                     WHERE object_id = OBJECT_ID(N'SaleItems') AND name = N'ProductId' AND is_nullable = 0)
-                ALTER TABLE [SaleItems] ALTER COLUMN [ProductId] uniqueidentifier NULL;
+                ALTER TABLE [SaleItems] ALTER COLUMN [ProductId] int NULL;
             IF OBJECT_ID(N'ProductVariants', N'U') IS NULL
             BEGIN
                 CREATE TABLE [ProductVariants] (
-                    [Id] uniqueidentifier NOT NULL,
-                    [ProductId] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [ProductId] int NOT NULL,
                     [SizeName] nvarchar(40) NOT NULL,
                     [ColorName] nvarchar(40) NOT NULL,
                     [StockQuantity] decimal(18,3) NOT NULL,
@@ -215,9 +218,9 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'StockBatches', N'U') IS NULL
             BEGIN
                 CREATE TABLE [StockBatches] (
-                    [Id] uniqueidentifier NOT NULL,
-                    [ProductId] uniqueidentifier NOT NULL,
-                    [VariantId] uniqueidentifier NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [ProductId] int NOT NULL,
+                    [VariantId] int NULL,
                     [PurchasedAt] datetime2 NOT NULL,
                     [InitialQuantity] decimal(18,3) NOT NULL,
                     [RemainingQuantity] decimal(18,3) NOT NULL,
@@ -231,9 +234,9 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'SaleItemBatchUsages', N'U') IS NULL
             BEGIN
                 CREATE TABLE [SaleItemBatchUsages] (
-                    [Id] uniqueidentifier NOT NULL,
-                    [SaleItemId] uniqueidentifier NOT NULL,
-                    [StockBatchId] uniqueidentifier NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [SaleItemId] int NOT NULL,
+                    [StockBatchId] int NULL,
                     [Quantity] decimal(18,3) NOT NULL,
                     [UnitCost] decimal(18,4) NOT NULL,
                     CONSTRAINT [PK_SaleItemBatchUsages] PRIMARY KEY ([Id])
@@ -243,7 +246,7 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'PurchaseInvoices', N'U') IS NULL
             BEGIN
                 CREATE TABLE [PurchaseInvoices] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [InvoiceNo] nvarchar(40) NOT NULL,
                     [SupplierName] nvarchar(200) NULL,
                     [PurchasedAt] datetime2 NOT NULL,
@@ -254,11 +257,11 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'PurchaseInvoices', N'U') IS NOT NULL AND COL_LENGTH(N'PurchaseInvoices', N'PaymentKind') IS NULL
                 ALTER TABLE [PurchaseInvoices] ADD [PaymentKind] nvarchar(20) NULL;
             IF OBJECT_ID(N'PurchaseInvoices', N'U') IS NOT NULL AND COL_LENGTH(N'PurchaseInvoices', N'AccountId') IS NULL
-                ALTER TABLE [PurchaseInvoices] ADD [AccountId] uniqueidentifier NULL;
+                ALTER TABLE [PurchaseInvoices] ADD [AccountId] int NULL;
             IF OBJECT_ID(N'ExpenseCategories', N'U') IS NULL
             BEGIN
                 CREATE TABLE [ExpenseCategories] (
-                    [Id] uniqueidentifier NOT NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
                     [Name] nvarchar(80) NOT NULL,
                     [Type] nvarchar(20) NOT NULL,
                     [Color] nvarchar(20) NOT NULL,
@@ -269,9 +272,9 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'LedgerEntries', N'U') IS NULL
             BEGIN
                 CREATE TABLE [LedgerEntries] (
-                    [Id] uniqueidentifier NOT NULL,
-                    [AccountId] uniqueidentifier NOT NULL,
-                    [CategoryId] uniqueidentifier NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [AccountId] int NOT NULL,
+                    [CategoryId] int NULL,
                     [Type] nvarchar(20) NOT NULL,
                     [Amount] decimal(18,2) NOT NULL,
                     [Commission] decimal(18,2) NOT NULL,
@@ -284,10 +287,10 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'PurchaseInvoiceLines', N'U') IS NULL
             BEGIN
                 CREATE TABLE [PurchaseInvoiceLines] (
-                    [Id] uniqueidentifier NOT NULL,
-                    [InvoiceId] uniqueidentifier NOT NULL,
-                    [ProductId] uniqueidentifier NOT NULL,
-                    [VariantId] uniqueidentifier NULL,
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [InvoiceId] int NOT NULL,
+                    [ProductId] int NOT NULL,
+                    [VariantId] int NULL,
                     [ProductName] nvarchar(200) NOT NULL,
                     [Quantity] decimal(18,3) NOT NULL,
                     [UnitCost] decimal(18,4) NOT NULL,
@@ -295,12 +298,33 @@ public static class TenantSchemaEnsuring
                     CONSTRAINT [PK_PurchaseInvoiceLines] PRIMARY KEY ([Id])
                 );
             END
+            IF COL_LENGTH(N'Sales', N'CashAmount') IS NULL
+                ALTER TABLE [Sales] ADD [CashAmount] decimal(18,2) NOT NULL CONSTRAINT [DF_Sales_CashAmount] DEFAULT 0;
+            IF COL_LENGTH(N'Sales', N'CardAmount') IS NULL
+                ALTER TABLE [Sales] ADD [CardAmount] decimal(18,2) NOT NULL CONSTRAINT [DF_Sales_CardAmount] DEFAULT 0;
+            IF COL_LENGTH(N'Sales', N'AccountsPosted') IS NULL
+                ALTER TABLE [Sales] ADD [AccountsPosted] bit NOT NULL CONSTRAINT [DF_Sales_AccountsPosted] DEFAULT 0;
             """,
             ct);
+
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE [Sales] SET [CashAmount] = [GrandTotal]
+                WHERE [PaymentMethod] = 0 AND [CashAmount] = 0 AND [CardAmount] = 0;
+                UPDATE [Sales] SET [CardAmount] = [GrandTotal]
+                WHERE [PaymentMethod] = 1 AND [CashAmount] = 0 AND [CardAmount] = 0;
+                """,
+                ct);
 
             if (!await db.CashAccounts.AnyAsync(ct))
             {
                 db.CashAccounts.Add(new CashAccount { Name = "Merkez Kasa", Type = "cash", Balance = 0, IsActive = true });
+                await db.SaveChangesAsync(ct);
+            }
+
+            if (!await db.CashAccounts.AnyAsync(a => a.Type == "pos", ct))
+            {
+                db.CashAccounts.Add(new CashAccount { Name = "POS", Type = "pos", Balance = 0, IsActive = true });
                 await db.SaveChangesAsync(ct);
             }
 

@@ -61,8 +61,8 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(customer));
     }
 
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] CreateCustomerRequest request, CancellationToken ct)
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] CreateCustomerRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest(new { message = "Müşteri adı zorunlu." });
@@ -81,8 +81,8 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(customer));
     }
 
-    [HttpPost("{id:guid}/payments")]
-    public async Task<IActionResult> AddPayment(Guid id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
+    [HttpPost("{id:int}/payments")]
+    public async Task<IActionResult> AddPayment(int id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
     {
         if (request.Amount <= 0)
             return BadRequest(new { message = "Ödeme tutarı 0'dan büyük olmalı." });
@@ -109,8 +109,8 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(customer));
     }
 
-    [HttpPost("{id:guid}/debt")]
-    public async Task<IActionResult> AddDebt(Guid id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
+    [HttpPost("{id:int}/debt")]
+    public async Task<IActionResult> AddDebt(int id, [FromBody] CustomerPaymentRequest request, CancellationToken ct)
     {
         if (request.Amount <= 0)
             return BadRequest(new { message = "Borç tutarı 0'dan büyük olmalı." });
@@ -133,8 +133,8 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         return Ok(Map(customer));
     }
 
-    [HttpGet("{id:guid}/statement")]
-    public async Task<IActionResult> Statement(Guid id, CancellationToken ct)
+    [HttpGet("{id:int}/statement")]
+    public async Task<IActionResult> Statement(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -177,7 +177,7 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
                 type = kind,
                 amount = move.Amount,
                 note = move.Note,
-                accountName = move.AccountId is Guid accountId && accountNames.TryGetValue(accountId, out var accountName) ? accountName : null,
+                accountName = move.AccountId is int accountId && accountNames.TryGetValue(accountId, out var accountName) ? accountName : null,
                 runningBalance = Math.Round(running, 2)
             });
         }
@@ -197,8 +197,8 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         });
     }
 
-    [HttpPost("{id:guid}/reminder")]
-    public async Task<IActionResult> Reminder(Guid id, CancellationToken ct)
+    [HttpPost("{id:int}/reminder")]
+    public async Task<IActionResult> Reminder(int id, CancellationToken ct)
     {
         await using var db = await Open(ct);
         var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -238,5 +238,5 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         customer.Balance
     };
 
-    private sealed record Move(Guid Id, DateTime At, string? Kind, decimal Amount, string? Note, Guid? AccountId);
+    private sealed record Move(int Id, DateTime At, string? Kind, decimal Amount, string? Note, int? AccountId);
 }

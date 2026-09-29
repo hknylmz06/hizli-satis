@@ -89,7 +89,7 @@ public class DatabaseSetupController(
         return Ok(new
         {
             ok = true,
-            message = "SQL Server kaydedildi. Platform girişi: admin / Admin123!",
+            message = "SQL Server kaydedildi.",
             settings = View(saved, check.Ok, check.Message)
         });
     }

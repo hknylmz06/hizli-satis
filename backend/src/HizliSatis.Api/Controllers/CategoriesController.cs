@@ -47,8 +47,8 @@ public class CategoriesController(TenantDbContextFactory tenantDbFactory) : Cont
         return Ok(new { category.Id, category.Name, category.Color });
     }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureCategoriesAsync(db, ct);

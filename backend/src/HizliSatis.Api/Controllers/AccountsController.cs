@@ -14,7 +14,7 @@ namespace HizliSatis.Api.Controllers;
 public class AccountsController(TenantDbContextFactory tenantDbFactory) : ControllerBase
 {
     public record AccountRequest(string Name, string Type, decimal Balance, decimal CommissionRate);
-    public record TransferRequest(Guid FromAccountId, Guid ToAccountId, decimal Amount, string? Note);
+    public record TransferRequest(int FromAccountId, int ToAccountId, decimal Amount, string? Note);
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -93,8 +93,8 @@ public class AccountsController(TenantDbContextFactory tenantDbFactory) : Contro
         return Ok(new { message = "Virman tamamlandı." });
     }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Remove(Guid id, CancellationToken ct)
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Remove(int id, CancellationToken ct)
     {
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
@@ -111,8 +111,8 @@ public class AccountsController(TenantDbContextFactory tenantDbFactory) : Contro
         return Ok(new { message = used ? "Hesap geçmişi olduğu için kapatıldı." : "Hesap silindi." });
     }
 
-    [HttpGet("{id:guid}/movements")]
-    public async Task<IActionResult> Movements(Guid id, CancellationToken ct)
+    [HttpGet("{id:int}/movements")]
+    public async Task<IActionResult> Movements(int id, CancellationToken ct)
     {
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
@@ -120,7 +120,7 @@ public class AccountsController(TenantDbContextFactory tenantDbFactory) : Contro
         if (account is null) return NotFound();
         var accounts = await db.CashAccounts.AsNoTracking().Where(a => a.IsActive).ToListAsync(ct);
         var cash = accounts.FirstOrDefault(a => a.Type == "cash") ?? accounts.FirstOrDefault();
-        var card = accounts.FirstOrDefault(a => a.Type is "pos" or "bank") ?? cash;
+        var card = accounts.FirstOrDefault(a => a.Type == "pos") ?? accounts.FirstOrDefault(a => a.Type == "bank") ?? cash;
         var rows = new List<Move>();
 
         if (cash?.Id == id || card?.Id == id)
@@ -128,9 +128,10 @@ public class AccountsController(TenantDbContextFactory tenantDbFactory) : Contro
             var sales = await db.Sales.AsNoTracking().Where(s => s.PaymentMethod != PaymentMethod.Veresiye).OrderByDescending(s => s.SoldAt).Take(200).ToListAsync(ct);
             foreach (var sale in sales)
             {
-                var target = sale.PaymentMethod == PaymentMethod.KrediKarti ? card : cash;
-                if (target?.Id != id) continue;
-                rows.Add(new Move(sale.SoldAt, "Satış", sale.ReceiptNo, sale.GrandTotal, "in"));
+                if (cash?.Id == id && sale.CashAmount > 0)
+                    rows.Add(new Move(sale.SoldAt, "Satış nakit", sale.ReceiptNo, sale.CashAmount, "in"));
+                if (card?.Id == id && sale.CardAmount > 0)
+                    rows.Add(new Move(sale.SoldAt, "Satış POS", sale.ReceiptNo, sale.CardAmount, "in"));
             }
         }
 

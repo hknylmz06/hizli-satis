@@ -13,11 +13,11 @@ namespace HizliSatis.Api.Controllers;
 [Route("api/expenses")]
 public class ExpensesController(TenantDbContextFactory tenantDbFactory) : ControllerBase
 {
-    public record EntryRequest(Guid AccountId, Guid? CategoryId, string Type, decimal Amount, string? Note);
+    public record EntryRequest(int AccountId, int? CategoryId, string Type, decimal Amount, string? Note);
     public record CategoryRequest(string Name, string Type, string? Color);
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? type, [FromQuery] Guid? accountId, [FromQuery] string? q, CancellationToken ct)
+    public async Task<IActionResult> List([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? type, [FromQuery] int? accountId, [FromQuery] string? q, CancellationToken ct)
     {
         var (start, end) = Range(from, to);
         await using var db = tenantDbFactory.Create();
@@ -34,7 +34,7 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
                 _ => true
             }).ToList();
         }
-        if (accountId is Guid account)
+        if (accountId is int account)
             rows = rows.Where(row => row.AccountId == account).ToList();
         if (!string.IsNullOrWhiteSpace(q))
         {
@@ -106,7 +106,7 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
         var account = await db.CashAccounts.FirstOrDefaultAsync(a => a.Id == request.AccountId && a.IsActive, ct);
         if (account is null)
             return BadRequest(new { message = "Kasa veya banka seç." });
-        if (request.CategoryId is Guid categoryId && !await db.ExpenseCategories.AnyAsync(c => c.Id == categoryId, ct))
+        if (request.CategoryId is int categoryId && !await db.ExpenseCategories.AnyAsync(c => c.Id == categoryId, ct))
             return BadRequest(new { message = "Kategori bulunamadı." });
 
         var entry = new LedgerEntry
@@ -134,7 +134,7 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
         var accounts = await db.CashAccounts.AsNoTracking().Where(a => a.IsActive).ToListAsync(ct);
         var names = accounts.ToDictionary(a => a.Id, a => a.Name);
         var cash = accounts.FirstOrDefault(a => a.Type == "cash") ?? accounts.FirstOrDefault();
-        var card = accounts.FirstOrDefault(a => a.Type is "pos" or "bank") ?? cash;
+        var card = accounts.FirstOrDefault(a => a.Type == "pos") ?? accounts.FirstOrDefault(a => a.Type == "bank") ?? cash;
         var categories = await db.ExpenseCategories.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name, ct);
         var rows = new List<LedgerRow>();
 
@@ -143,16 +143,16 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
             .ToListAsync(ct);
         foreach (var sale in sales)
         {
-            var account = sale.PaymentMethod == PaymentMethod.KrediKarti ? card : cash;
-            if (account is null) continue;
-            var method = sale.PaymentMethod == PaymentMethod.KrediKarti ? "Kredi Kartı" : "Nakit";
-            rows.Add(new LedgerRow(sale.SoldAt, "sale", "Satış Tahsilatı", account.Id, account.Name, $"POS Satış ({method} - {account.Name}): {sale.ReceiptNo}", sale.GrandTotal, 0, sale.GrandTotal));
+            if (sale.CashAmount > 0 && cash is not null)
+                rows.Add(new LedgerRow(sale.SoldAt, "sale", "Satış Tahsilatı", cash.Id, cash.Name, $"POS Satış (Nakit - {cash.Name}): {sale.ReceiptNo}", sale.CashAmount, 0, sale.CashAmount));
+            if (sale.CardAmount > 0 && card is not null)
+                rows.Add(new LedgerRow(sale.SoldAt, "sale", "Satış Tahsilatı", card.Id, card.Name, $"POS Satış (Kredi Kartı - {card.Name}): {sale.ReceiptNo}", sale.CardAmount, 0, sale.CardAmount));
         }
 
         var ledger = await db.LedgerEntries.AsNoTracking().Where(e => e.CreatedAt >= start && e.CreatedAt < end).ToListAsync(ct);
         foreach (var entry in ledger)
         {
-            var category = entry.CategoryId is Guid id && categories.TryGetValue(id, out var name) ? name : (entry.Type == "income" ? "Gelir" : "Gider");
+            var category = entry.CategoryId is int id && categories.TryGetValue(id, out var name) ? name : (entry.Type == "income" ? "Gelir" : "Gider");
             rows.Add(new LedgerRow(entry.CreatedAt, entry.Type, entry.Type == "income" ? "Gelir" : "Gider", entry.AccountId, names.GetValueOrDefault(entry.AccountId) ?? "-", $"{category}: {entry.Note}", entry.Amount, entry.Commission, entry.NetAmount));
         }
 
@@ -194,7 +194,7 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
         return (start, end);
     }
 
-    private sealed record LedgerRow(DateTime At, string Kind, string KindLabel, Guid AccountId, string AccountName, string Category, decimal Gross, decimal Commission, decimal Net)
+    private sealed record LedgerRow(DateTime At, string Kind, string KindLabel, int AccountId, string AccountName, string Category, decimal Gross, decimal Commission, decimal Net)
     {
         public string? Note => Category;
     }

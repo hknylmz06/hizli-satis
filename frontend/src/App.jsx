@@ -9,7 +9,7 @@ import ProductsPage from './pages/ProductsPage'
 import CustomersPage from './pages/CustomersPage'
 import ReportsPage from './pages/ReportsPage'
 import FiscalPairingPage from './pages/FiscalPairingPage'
-import ComingSoonPage from './pages/ComingSoonPage'
+import SupportPage from './pages/SupportPage'
 import PurchaseInvoicesPage from './pages/PurchaseInvoicesPage'
 import ExpensesPage from './pages/ExpensesPage'
 import AccountsPage from './pages/AccountsPage'
@@ -63,7 +63,7 @@ export default function App() {
         <Route path="invoices" element={<Guard perm="can_access_invoices"><PurchaseInvoicesPage /></Guard>} />
         <Route path="expenses" element={<Guard perm="can_access_definitions"><ExpensesPage /></Guard>} />
         <Route path="accounts" element={<Guard perm="can_access_definitions"><AccountsPage /></Guard>} />
-        <Route path="support" element={<ComingSoonPage title="Destek & İletişim" text="Yazarkasa eşleştirme Sistem Ayarları ekranında." />} />
+        <Route path="support" element={<SupportPage />} />
       </Route>
     </Routes>
   )

@@ -42,6 +42,7 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
             p.IsDomestic,
             p.UnitQty,
             p.UnitType,
+            p.Image,
             p.CriticalStockLevel,
             p.IsActive,
             p.CategoryId,
@@ -83,6 +84,7 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
                 p.VatRate,
                 p.StockQuantity,
                 p.Unit,
+                p.Image,
                 Variants = p.Variants
                     .OrderBy(v => v.SizeName).ThenBy(v => v.ColorName)
                     .Select(v => new { v.Id, v.SizeName, v.ColorName, v.StockQuantity })
@@ -111,19 +113,23 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
         };
         ApplyLabel(product, request);
         SyncVariants(product, request, replace: false);
-        FifoStock.AddOpening(db, product);
         db.Products.Add(product);
+        await db.SaveChangesAsync(ct);
+        FifoStock.AddOpening(db, product);
         await db.SaveChangesAsync(ct);
         return Ok(Shape(product));
     }
 
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] ProductRequest request, CancellationToken ct)
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] ProductRequest request, CancellationToken ct)
     {
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
         var product = await db.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == id && p.IsActive, ct);
         if (product is null) return NotFound();
+
+        var previousStock = product.StockQuantity;
+        var previousVariants = product.Variants.ToDictionary(v => v.Id, v => v.StockQuantity);
 
         product.Name = request.Name.Trim();
         product.Barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim();
@@ -137,11 +143,43 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
         ApplyLabel(product, request);
         SyncVariants(product, request, replace: true);
         await db.SaveChangesAsync(ct);
+
+        if (product.Variants.Count == 0)
+        {
+            await FifoStock.AdjustOnHandAsync(db, product.Id, null, previousStock, product.StockQuantity, product.PurchasePrice, ct);
+        }
+        else
+        {
+            foreach (var variant in product.Variants)
+            {
+                previousVariants.TryGetValue(variant.Id, out var before);
+                await FifoStock.AdjustOnHandAsync(db, product.Id, variant.Id, before, variant.StockQuantity, product.PurchasePrice, ct);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
         return Ok(Shape(product));
     }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    public record ImageRequest(string? Image);
+
+    [HttpPut("{id:int}/image")]
+    public async Task<IActionResult> SetImage(int id, [FromBody] ImageRequest request, CancellationToken ct)
+    {
+        await using var db = tenantDbFactory.Create();
+        await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
+        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id && p.IsActive, ct);
+        if (product is null) return NotFound();
+        var image = string.IsNullOrWhiteSpace(request.Image) ? null : request.Image.Trim();
+        if (image is { Length: > 1_500_000 })
+            return BadRequest(new { message = "Resim çok büyük." });
+        product.Image = image;
+        await db.SaveChangesAsync(ct);
+        return Ok(new { product.Id, product.Image });
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         await using var db = tenantDbFactory.Create();
         var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -223,6 +261,7 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
         product.OriginCountry,
         product.IsDomestic,
         product.UnitQty,
-        product.UnitType
+        product.UnitType,
+        product.Image
     };
 }

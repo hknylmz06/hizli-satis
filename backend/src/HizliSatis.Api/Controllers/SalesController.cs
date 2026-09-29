@@ -21,7 +21,7 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             return BadRequest(new { message = "Sepet boş olamaz." });
 
         if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var paymentMethod))
-            return BadRequest(new { message = "Ödeme tipi Nakit, KrediKarti veya Veresiye olmalı." });
+            return BadRequest(new { message = "Ödeme tipi Nakit, KrediKarti, Veresiye veya Parcali olmalı." });
 
         if (paymentMethod == PaymentMethod.Veresiye && request.CustomerId is null)
             return BadRequest(new { message = "Veresiye satış için cari seçilmeli." });
@@ -34,13 +34,13 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             return BadRequest(new { message = "Veresiye satış yetkin yok." });
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var productIds = request.Items.Where(i => i.ProductId is Guid).Select(i => i.ProductId!.Value).Distinct().ToList();
+        var productIds = request.Items.Where(i => i.ProductId is int).Select(i => i.ProductId!.Value).Distinct().ToList();
         var products = await db.Products.Where(p => productIds.Contains(p.Id) && p.IsActive).ToListAsync(ct);
         if (products.Count != productIds.Count)
             return BadRequest(new { message = "Bazı ürünler bulunamadı." });
 
         Customer? customer = null;
-        if (request.CustomerId is Guid customerId)
+        if (request.CustomerId is int customerId)
         {
             customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId, ct);
             if (customer is null)
@@ -99,7 +99,7 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             var product = products.First(p => p.Id == line.ProductId);
             var productVariants = variants.Where(v => v.ProductId == product.Id).ToList();
             ProductVariant? variant = null;
-            if (line.VariantId is Guid variantId)
+            if (line.VariantId is int variantId)
             {
                 variant = productVariants.FirstOrDefault(v => v.Id == variantId);
                 if (variant is null)
@@ -155,6 +155,34 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
         if (paymentMethod == PaymentMethod.Veresiye && customer is not null)
             customer.Balance += sale.GrandTotal;
 
+        if (paymentMethod == PaymentMethod.Parcali)
+        {
+            var cashPart = Math.Round(request.CashAmount.GetValueOrDefault(), 2, MidpointRounding.AwayFromZero);
+            if (cashPart <= 0 || cashPart >= sale.GrandTotal)
+                return BadRequest(new { message = "Nakit tutarı sıfırdan büyük ve sepet tutarından küçük olmalı. Kalan karta yazılır." });
+            sale.CashAmount = cashPart;
+            sale.CardAmount = Math.Round(sale.GrandTotal - cashPart, 2, MidpointRounding.AwayFromZero);
+        }
+        else if (paymentMethod == PaymentMethod.Nakit)
+        {
+            sale.CashAmount = sale.GrandTotal;
+        }
+        else if (paymentMethod == PaymentMethod.KrediKarti)
+        {
+            sale.CardAmount = sale.GrandTotal;
+        }
+
+        var (cashAccount, posAccount) = await RegistersAsync(db, ct);
+        if (sale.CashAmount > 0 && cashAccount is null)
+            return BadRequest(new { message = "Nakit kasa yok. Kasa ve bankadan bir nakit hesabı aç." });
+        if (sale.CardAmount > 0 && posAccount is null)
+            return BadRequest(new { message = "POS kasası yok. Kasa ve bankadan bir POS hesabı aç." });
+        if (cashAccount is not null)
+            cashAccount.Balance += sale.CashAmount;
+        if (posAccount is not null)
+            posAccount.Balance += sale.CardAmount;
+        sale.AccountsPosted = sale.CashAmount > 0 || sale.CardAmount > 0;
+
         db.Sales.Add(sale);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -168,6 +196,8 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             sale.SubTotal,
             sale.VatTotal,
             sale.GrandTotal,
+            sale.CashAmount,
+            sale.CardAmount,
             Profit = sale.GrandTotal - sale.CostTotal,
             Items = sale.Items.Select(i => new
             {
@@ -179,8 +209,8 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
         });
     }
 
-    [HttpPost("{id:guid}/void")]
-    public async Task<IActionResult> Void(Guid id, CancellationToken ct)
+    [HttpPost("{id:int}/void")]
+    public async Task<IActionResult> Void(int id, CancellationToken ct)
     {
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
@@ -193,13 +223,13 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
 
         foreach (var item in sale.Items)
         {
-            if (item.ProductId is Guid productId)
+            if (item.ProductId is int productId)
             {
                 var product = await db.Products.FirstOrDefaultAsync(p => p.Id == productId, ct);
                 if (product is not null)
                     product.StockQuantity += item.Quantity;
             }
-            if (item.VariantId is Guid variantId)
+            if (item.VariantId is int variantId)
             {
                 var variant = await db.ProductVariants.FirstOrDefaultAsync(v => v.Id == variantId, ct);
                 if (variant is not null)
@@ -207,11 +237,20 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             }
         }
 
-        if (sale.PaymentMethod == PaymentMethod.Veresiye && sale.CustomerId is Guid customerId)
+        if (sale.PaymentMethod == PaymentMethod.Veresiye && sale.CustomerId is int customerId)
         {
             var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId, ct);
             if (customer is not null)
                 customer.Balance -= sale.GrandTotal;
+        }
+
+        if (sale.AccountsPosted)
+        {
+            var (cashAccount, posAccount) = await RegistersAsync(db, ct);
+            if (cashAccount is not null)
+                cashAccount.Balance -= sale.CashAmount;
+            if (posAccount is not null)
+                posAccount.Balance -= sale.CardAmount;
         }
 
         db.SaleItems.RemoveRange(sale.Items);
@@ -239,5 +278,11 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             })
             .ToListAsync(ct);
         return Ok(items);
+    }
+
+    private static async Task<(CashAccount? Cash, CashAccount? Pos)> RegistersAsync(Infrastructure.Persistence.TenantDbContext db, CancellationToken ct)
+    {
+        var accounts = await db.CashAccounts.Where(a => a.IsActive).OrderBy(a => a.Id).ToListAsync(ct);
+        return (accounts.FirstOrDefault(a => a.Type == "cash"), accounts.FirstOrDefault(a => a.Type == "pos"));
     }
 }

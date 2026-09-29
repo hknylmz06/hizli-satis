@@ -2,9 +2,9 @@ namespace HizliSatis.Domain.Tenant;
 
 public class SupplierPayment
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid SupplierId { get; set; }
-    public Guid? AccountId { get; set; }
+    public int Id { get; set; }
+    public int SupplierId { get; set; }
+    public int? AccountId { get; set; }
     public Supplier? Supplier { get; set; }
     public decimal Amount { get; set; }
     public string? Kind { get; set; } = "payment";

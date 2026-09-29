@@ -33,8 +33,8 @@ public record ProductRequest(
     decimal VatRate,
     decimal StockQuantity,
     decimal CriticalStockLevel,
-    Guid? CategoryId = null,
-    Guid? DepartmentId = null,
+    int? CategoryId = null,
+    int? DepartmentId = null,
     string? Unit = null,
     string? OriginCountry = null,
     bool IsDomestic = false,
@@ -50,18 +50,18 @@ public record DepartmentRequest(string Name, string? Color, decimal VatRate);
 
 public record NameRequest(string Name, string? Color);
 
-public record VariantRequest(Guid SizeId, Guid ColorId);
+public record VariantRequest(int SizeId, int ColorId);
 
 public record CreateCustomerRequest(string Name, string? Phone, string? Email, string? Address, string? Note, decimal? CreditLimit);
 
-public record CustomerPaymentRequest(decimal Amount, string? Note, Guid? AccountId = null);
+public record CustomerPaymentRequest(decimal Amount, string? Note, int? AccountId = null);
 
 public record SaveSupplierRequest(string Name, string? Phone, string? Email, string? Address, string? Note);
 
 public record SaleLineRequest(
-    Guid? ProductId,
+    int? ProductId,
     decimal Quantity,
-    Guid? VariantId = null,
+    int? VariantId = null,
     decimal? UnitPrice = null,
     string? Name = null,
     decimal? VatRate = null);
@@ -69,9 +69,11 @@ public record SaleLineRequest(
 public record CreateSaleRequest(
     List<SaleLineRequest> Items,
     string PaymentMethod,
-    Guid? CustomerId,
-    decimal? DiscountAmount = null);
+    int? CustomerId,
+    decimal? DiscountAmount = null,
+    decimal? CashAmount = null,
+    decimal? CardAmount = null);
 
-public record PurchaseLineRequest(Guid ProductId, Guid? VariantId, decimal Quantity, decimal UnitCost);
+public record PurchaseLineRequest(int ProductId, int? VariantId, decimal Quantity, decimal UnitCost);
 
-public record PurchaseRequest(string? SupplierName, string? InvoiceNo, DateTime? PurchasedAt, List<PurchaseLineRequest> Lines, string? PaymentKind = null, Guid? AccountId = null);
+public record PurchaseRequest(string? SupplierName, string? InvoiceNo, DateTime? PurchasedAt, List<PurchaseLineRequest> Lines, string? PaymentKind = null, int? AccountId = null);

@@ -133,6 +133,8 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options) : DbCont
             e.Property(x => x.VatTotal).HasPrecision(18, 2);
             e.Property(x => x.GrandTotal).HasPrecision(18, 2);
             e.Property(x => x.CostTotal).HasPrecision(18, 2);
+            e.Property(x => x.CashAmount).HasPrecision(18, 2);
+            e.Property(x => x.CardAmount).HasPrecision(18, 2);
             e.HasMany(x => x.Items).WithOne(x => x.Sale!).HasForeignKey(x => x.SaleId);
             e.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId);
         });

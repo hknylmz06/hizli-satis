@@ -104,12 +104,12 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
             .Select(g =>
             {
                 var first = g.First().Item;
-                var product = first.ProductId is Guid id && productById.TryGetValue(id, out var found) ? found : null;
+                var product = first.ProductId is int id && productById.TryGetValue(id, out var found) ? found : null;
                 var qty = g.Sum(x => x.Item.Quantity);
                 var revenue = g.Sum(x => x.Item.LineTotal);
                 var cost = g.Sum(x => x.Item.PurchasePrice * x.Item.Quantity);
                 var profit = revenue - cost;
-                var category = first.ProductId is Guid productId && categoryByProduct.TryGetValue(productId, out var categoryName)
+                var category = first.ProductId is int productId && categoryByProduct.TryGetValue(productId, out var categoryName)
                     ? categoryName
                     : "Genel";
                 return new
@@ -138,7 +138,7 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
             .ToList();
 
         var categorySales = sales.SelectMany(s => s.Items)
-            .GroupBy(i => i.ProductId is Guid id && categoryByProduct.TryGetValue(id, out var name) ? name : i.ProductId is null ? "Departman" : "Kategorisiz")
+            .GroupBy(i => i.ProductId is int id && categoryByProduct.TryGetValue(id, out var name) ? name : i.ProductId is null ? "Departman" : "Kategorisiz")
             .Select(g =>
             {
                 var qty = g.Sum(x => x.Quantity);
@@ -200,10 +200,10 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
                             name = user?.DisplayName ?? (string.IsNullOrEmpty(g.Key) ? "Sistem" : g.Key),
                             role = user?.Role ?? "-",
                             count = g.Count(),
-                            cash = g.Where(s => s.PaymentMethod == PaymentMethod.Nakit).Sum(s => s.GrandTotal),
-                            card = g.Where(s => s.PaymentMethod == PaymentMethod.KrediKarti).Sum(s => s.GrandTotal),
+                            cash = g.Sum(s => s.CashAmount),
+                            card = g.Sum(s => s.CardAmount),
                             credit = g.Where(s => s.PaymentMethod == PaymentMethod.Veresiye).Sum(s => s.GrandTotal),
-                            partial = 0m,
+                            partial = g.Where(s => s.PaymentMethod == PaymentMethod.Parcali).Sum(s => s.GrandTotal),
                             revenue,
                             discount = g.Sum(s => Math.Max(0, s.SubTotal + s.VatTotal - s.GrandTotal)),
                             cost,
@@ -218,14 +218,14 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
                     direction = "in",
                     amount = p.Amount,
                     note = p.Note ?? "Müşteri tahsilatı",
-                    accountName = p.AccountId is Guid id && accountNames.TryGetValue(id, out var name) ? name : null
+                    accountName = p.AccountId is int id && accountNames.TryGetValue(id, out var name) ? name : null
                 }).Concat(paidOut.Select(p => new
                 {
                     at = p.PaidAt,
                     direction = "out",
                     amount = p.Amount,
                     note = p.Note ?? "Tedarikçi ödemesi",
-                    accountName = p.AccountId is Guid id && accountNames.TryGetValue(id, out var name) ? name : null
+                    accountName = p.AccountId is int id && accountNames.TryGetValue(id, out var name) ? name : null
                 })).OrderByDescending(x => x.at).Take(1000)
             },
             kar = new
@@ -253,6 +253,7 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
     {
         HizliSatis.Domain.Enums.PaymentMethod.KrediKarti => "Kredi kartı",
         HizliSatis.Domain.Enums.PaymentMethod.Veresiye => "Veresiye",
+        HizliSatis.Domain.Enums.PaymentMethod.Parcali => "Parçalı",
         _ => "Nakit"
     };
 }

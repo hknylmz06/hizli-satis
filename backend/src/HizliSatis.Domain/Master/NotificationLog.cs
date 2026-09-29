@@ -2,8 +2,8 @@ namespace HizliSatis.Domain.Master;
 
 public class NotificationLog
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid TenantId { get; set; }
+    public int Id { get; set; }
+    public int TenantId { get; set; }
     public string Channel { get; set; } = "Email";
     public string Recipient { get; set; } = string.Empty;
     public string Subject { get; set; } = string.Empty;

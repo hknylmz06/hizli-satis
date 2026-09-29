@@ -12,6 +12,7 @@ public class MasterSeedService(
     public async Task InitializeAsync(CancellationToken ct = default)
     {
         await db.Database.EnsureCreatedAsync(ct);
+        await IntIdMigration.ApplyAsync(db, ct);
         await EnsureLicenseColumnAsync(ct);
 
         if (!await db.PlatformAdmins.AnyAsync(ct))
