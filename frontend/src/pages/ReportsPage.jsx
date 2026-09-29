@@ -238,6 +238,9 @@ export default function ReportsPage() {
   const [tab, setTab] = useState('kasa')
   const [cashier, setCashier] = useState('')
   const [stockFilter, setStockFilter] = useState('all')
+  const [stockQuery, setStockQuery] = useState('')
+  const [stockPack, setStockPack] = useState(null)
+  const [stockError, setStockError] = useState('')
   const [productCashier, setProductCashier] = useState('')
   const [productCategory, setProductCategory] = useState('')
   const [productQuery, setProductQuery] = useState('')
@@ -269,10 +272,22 @@ export default function ReportsPage() {
     load().catch((err) => setError(err.message))
   }, [session.token])
 
+  async function loadStock(filter = stockFilter, query = stockQuery) {
+    setStockError('')
+    const params = new URLSearchParams({ filter, q: query.trim(), take: '200' })
+    const data = await api(`/api/reports/stock?${params}`, { token: session.token })
+    setStockPack(data)
+  }
+
   useEffect(() => {
     if (tab !== 'kar') return
     loadKar(karPreset, karFrom, karTo).catch((err) => setKarError(err.message))
   }, [tab, session.token])
+
+  useEffect(() => {
+    if (tab !== 'stok') return
+    loadStock(stockFilter, stockQuery).catch((err) => setStockError(err.message))
+  }, [tab, stockFilter, session.token])
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
@@ -462,23 +477,18 @@ export default function ReportsPage() {
           )}
 
           {tab === 'stok' && (() => {
-            const items = report.stok.items || []
-            const visible = items.filter((row) => {
-              if (stockFilter === 'in') return Number(row.stock) > 0
-              if (stockFilter === 'out') return Number(row.stock) <= 0
-              if (stockFilter === 'critical') return row.low
-              return true
-            })
-            const visibleValue = visible.reduce((sum, row) => sum + Number(row.stockValue || 0), 0)
+            const items = stockPack?.items || []
+            const shown = Number(stockPack?.shown || items.length)
+            const matchCount = Number(stockPack?.matchCount || 0)
             return (
               <div className="space-y-4">
                 <div className="panel flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                   <div>
                     <span className="block text-xs text-slate-400">Toplam stok değeri</span>
-                    <strong className="text-2xl text-amber-300">{money(stockFilter === 'all' ? report.stok.stockValue : visibleValue)}</strong>
-                    <span className="block text-[11px] text-slate-500">{visible.length} ürün</span>
+                    <strong className="text-2xl text-amber-300">{money(stockPack?.matchValue ?? report.stok.stockValue)}</strong>
+                    <span className="block text-[11px] text-slate-500">{matchCount} ürün{shown < matchCount ? ` · listede ilk ${shown}` : ''}</span>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap items-end gap-1.5">
                     {[
                       ['all', 'Tümü'],
                       ['in', 'Stoktakiler'],
@@ -487,15 +497,21 @@ export default function ReportsPage() {
                     ].map(([id, label]) => (
                       <button key={id} type="button" className={stockFilter === id ? 'primary' : 'ghost'} onClick={() => setStockFilter(id)}>{label}</button>
                     ))}
+                    <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); loadStock(stockFilter, stockQuery).catch((err) => setStockError(err.message)) }}>
+                      <input value={stockQuery} onChange={(e) => setStockQuery(e.target.value)} placeholder="Ürün veya barkod" className="w-44" />
+                      <button className="primary" type="submit">Ara</button>
+                    </form>
                   </div>
                 </div>
+                {stockError && <p className="error">{stockError}</p>}
+                {!stockPack && !stockError && <p className="muted">Stok yükleniyor...</p>}
                 <section className="panel overflow-x-auto">
                   <table>
                     <thead><tr><th>Ürün</th><th>Kategori</th><th>Durum</th><th>Stok</th><th>Kritik</th><th>Alış</th><th>Satış</th><th>Değer</th></tr></thead>
                     <tbody>
-                      {visible.length === 0 ? (
+                      {items.length === 0 ? (
                         <tr><td colSpan="8" className="text-slate-500">Bu filtrede ürün yok.</td></tr>
-                      ) : visible.map((row) => (
+                      ) : items.map((row) => (
                         <tr key={`${row.name}-${row.barcode || ''}`}>
                           <td>
                             <div className="font-bold text-white">{row.name}</div>
