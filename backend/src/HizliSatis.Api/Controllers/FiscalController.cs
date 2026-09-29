@@ -61,13 +61,20 @@ public class FiscalController(TenantDbContextFactory tenantDbFactory) : Controll
     {
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureFiscalTableAsync(db, ct);
-        var devices = await db.FiscalRegisters.AsNoTracking().OrderBy(x => x.Id).ToListAsync(ct);
         var users = await db.Users.AsNoTracking()
             .Where(u => u.IsActive)
             .OrderBy(u => u.DisplayName)
             .Select(u => new { u.Id, u.DisplayName, u.Username })
             .ToListAsync(ct);
-        return Ok(new { devices = devices.Select(MapRegister), users });
+        try
+        {
+            var devices = await db.FiscalRegisters.AsNoTracking().OrderBy(x => x.Id).ToListAsync(ct);
+            return Ok(new { devices = devices.Select(MapRegister), users });
+        }
+        catch (Exception)
+        {
+            return Ok(new { devices = Array.Empty<object>(), users, message = "Yazarkasa listesi okunamadı. Sayfayı bir kez yenile." });
+        }
     }
 
     [HttpPost("devices")]
