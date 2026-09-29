@@ -728,22 +728,20 @@ export default function QuickSalePage() {
   const priceLook = fiscal && !fiscal.isPaired
 
   return (
-    <div className="h-screen p-3 flex gap-3 overflow-hidden bg-[#070b16] text-slate-100">
-      <div className="w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-slate-900/90 rounded-3xl border border-slate-800 p-3 shadow-2xl min-h-0">
-        <div className="flex items-center justify-between pb-2">
-          <div className="flex items-center gap-1.5">
-            <button type="button" onClick={() => navigate('/app')} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl text-xs font-bold">
-              <LayoutDashboard className="w-4 h-4 text-blue-400" /> Menü
-            </button>
-            <button type="button" onClick={() => { setOkcOpen(true); setOkcMsg('') }} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl text-xs font-bold border ${fiscal?.isPaired ? 'bg-emerald-950 text-emerald-300 border-emerald-500/70' : 'bg-rose-950 text-rose-300 border-rose-500/70'}`}>
-              <Cpu className="w-4 h-4" /> ÖKC
-              <span className={`w-2 h-2 rounded-full ${fiscal?.isPaired ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-            </button>
-            <button type="button" onClick={() => setError('İade alma sıradaki adım.')} className="flex items-center gap-1 px-2.5 py-1.5 rounded-2xl text-xs font-bold border bg-amber-950/80 text-amber-300 border-amber-500/50">
-              <RotateCcw className="w-3.5 h-3.5" /> İade Al
-            </button>
-          </div>
-          <span className="text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
+    <div className="h-screen p-3 flex gap-3 overflow-x-auto overflow-y-hidden bg-[#070b16] text-slate-100">
+      <div className="w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-slate-900/90 rounded-3xl border border-slate-800 p-3 shadow-2xl min-h-0 relative z-20">
+        <div className="flex flex-wrap items-center gap-1.5 pb-2">
+          <button type="button" onClick={() => navigate('/app')} className="relative z-30 shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl text-xs font-bold cursor-pointer">
+            <LayoutDashboard className="w-4 h-4 text-blue-400" /> Menü
+          </button>
+          <button type="button" onClick={() => { setOkcOpen(true); setOkcMsg('') }} className={`relative z-30 shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold border cursor-pointer ${fiscal?.isPaired ? 'bg-emerald-950 text-emerald-300 border-emerald-500/70' : 'bg-rose-950 text-rose-300 border-rose-500/70'}`}>
+            <Cpu className="w-4 h-4" /> ÖKC
+            <span className={`w-2 h-2 rounded-full ${fiscal?.isPaired ? 'bg-emerald-400' : 'bg-rose-500'}`} />
+          </button>
+          <button type="button" onClick={() => setError('İade alma sıradaki adım.')} className="relative z-30 shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-2xl text-xs font-bold border cursor-pointer bg-amber-950/80 text-amber-300 border-amber-500/50">
+            <RotateCcw className="w-3.5 h-3.5" /> İade Al
+          </button>
+          <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
         </div>
 
         <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-2">
@@ -840,13 +838,13 @@ export default function QuickSalePage() {
         </div>
       </div>
 
-      <div className="flex-1 min-w-0 bg-slate-900/85 rounded-3xl border border-slate-800 p-3.5 overflow-hidden flex flex-col shadow-2xl">
-        <div className="flex items-center gap-2 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800 mb-3">
-          <button type="button" onClick={() => setMiddleTab('quick')} className={`flex-1 py-3 px-3 rounded-xl text-sm font-black flex items-center justify-center gap-2 ${middleTab === 'quick' ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-400'}`}>
-            <Sparkles className="w-5 h-5 text-amber-300" /> Hızlı Satış (Kısayol Tuşları & Ürünler)
+      <div className="flex-1 min-w-[320px] bg-slate-900/85 rounded-3xl border border-slate-800 p-3.5 overflow-hidden flex flex-col shadow-2xl">
+        <div className="flex items-stretch gap-2 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800 mb-3">
+          <button type="button" onClick={() => setMiddleTab('quick')} className={`flex-1 min-w-0 py-3 px-2 rounded-xl text-sm font-black flex items-center justify-center gap-2 text-center leading-tight ${middleTab === 'quick' ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-400'}`}>
+            <Sparkles className="w-5 h-5 shrink-0 text-amber-300" /> <span>Hızlı Satış</span>
           </button>
-          <button type="button" onClick={() => setMiddleTab('dept')} className={`flex-1 py-3 px-3 rounded-xl text-sm font-black flex items-center justify-center gap-2 ${middleTab === 'dept' ? 'bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-700 text-white' : 'text-slate-400'}`}>
-            <Cpu className="w-5 h-5 text-indigo-300" /> Departmanlı Satış (ÖKC Tuş Takımı)
+          <button type="button" onClick={() => setMiddleTab('dept')} className={`flex-1 min-w-0 py-3 px-2 rounded-xl text-sm font-black flex items-center justify-center gap-2 text-center leading-tight ${middleTab === 'dept' ? 'bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-700 text-white' : 'text-slate-400'}`}>
+            <Cpu className="w-5 h-5 shrink-0 text-indigo-300" /> <span>ÖKC Tuş Takımı</span>
           </button>
         </div>
 
