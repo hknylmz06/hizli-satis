@@ -190,6 +190,36 @@ public class ProductsController(
         return Ok(Shape(product));
     }
 
+    [HttpGet("image-search")]
+    public async Task<IActionResult> ImageSearch([FromQuery] string? q, CancellationToken ct)
+    {
+        var term = (q ?? "").Trim();
+        if (term.Length < 2) return Ok(new { images = Array.Empty<string>() });
+
+        var images = new List<string>();
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("tr-TR,tr;q=0.9");
+            var html = await client.GetStringAsync($"https://www.bing.com/images/async?q={Uri.EscapeDataString(term + " ürün")}&first=1&count=12", ct);
+            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(html, "murl&quot;:&quot;(https?:\\/\\/[^&]+?\\.(?:jpg|jpeg|png|webp))", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                var url = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value);
+                if (url.Contains("wikimedia", StringComparison.OrdinalIgnoreCase) || url.Contains("facebook", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!images.Contains(url)) images.Add(url);
+                if (images.Count >= 8) break;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Ürün resmi aranamadı.");
+        }
+
+        return Ok(new { images });
+    }
+
     public record ImageRequest(string? Image);
 
     [HttpPut("{id:int}/image")]

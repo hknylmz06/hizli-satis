@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Cpu, Layers, Package, Palette, Pencil, Percent, Plus, Shirt, Star, Tag, Trash2, UserCog, X } from 'lucide-react'
 import { api, fetchShortcuts, readLocalShortcuts, storeShortcuts } from '../api'
+import { searchProductImages } from '../productImages'
 import { useAuth } from '../auth'
 import { allows } from '../permissions'
 
@@ -797,6 +798,15 @@ export default function ProductsPage() {
                   ) : (
                     <div className="h-16 w-16 rounded-xl border border-dashed border-slate-600 bg-slate-900" />
                   )}
+                  <button
+                    type="button"
+                    className="text-xs font-bold text-indigo-300"
+                    onClick={async () => {
+                      const hits = await searchProductImages(api, session.token, form.name)
+                      if (hits[0]) setForm((prev) => ({ ...prev, image: hits[0] }))
+                      else setError('Otomatik resim bulunamadı. Dosyadan seç.')
+                    }}
+                  >Otomatik resim bul</button>
                   <label className="cursor-pointer text-xs font-bold text-emerald-300">
                     Dosyadan seç
                     <input

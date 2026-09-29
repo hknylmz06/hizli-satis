@@ -9,6 +9,7 @@ import { api, fetchShortcuts, readLocalShortcuts, storeShortcuts } from '../api'
 import { useAuth } from '../auth'
 import { ThemeToggle } from '../theme'
 import { allows } from '../permissions'
+import { READY_IMAGES, keywordImage, searchProductImages } from '../productImages'
 
 const emptySlots = () => [{ items: [] }, { items: [] }, { items: [] }]
 
@@ -106,6 +107,10 @@ export default function QuickSalePage() {
   const [shortcutMode, setShortcutMode] = useState('select')
   const [shortcutSearch, setShortcutSearch] = useState('')
   const [shortcutHits, setShortcutHits] = useState([])
+  const [imageTarget, setImageTarget] = useState(null)
+  const [imageBusy, setImageBusy] = useState(false)
+  const [imageNote, setImageNote] = useState('')
+  const [imageHits, setImageHits] = useState([])
   const [shortcutForm, setShortcutForm] = useState({ name: '', barcode: '', salePrice: '', vatRate: '20', stockQuantity: '100', imageUrl: '' })
   const [shortcutError, setShortcutError] = useState('')
   const inputRef = useRef(null)
@@ -275,13 +280,44 @@ export default function QuickSalePage() {
     return () => clearTimeout(timer)
   }, [shortcutOpen, shortcutMode, shortcutSearch, session.token])
 
+  async function findShortcutImage(name, apply) {
+    const term = String(name || '').trim()
+    if (term.length < 2) {
+      setImageNote('Önce ürün adını yaz.')
+      return
+    }
+    setImageBusy(true)
+    setImageNote('Resim aranıyor...')
+    const hits = await searchProductImages(api, session.token, term)
+    setImageHits(hits)
+    setImageBusy(false)
+    if (hits[0]) {
+      apply(hits[0])
+      setImageNote(hits.length > 1 ? `${hits.length} görsel bulundu. Beğenmezsen hazır görselden seç.` : 'Görsel bulundu.')
+    } else {
+      setImageNote('Bulunamadı. Hazır görselden seç veya dosyadan yükle.')
+    }
+  }
+
   function openShortcutModal() {
     setShortcutError('')
     setShortcutSearch('')
     setShortcutMode('select')
     setShortcutForm({ name: '', barcode: '', salePrice: '', vatRate: '20', stockQuantity: '100', imageUrl: '' })
+    setImageTarget(null)
+    setImageNote('')
+    setImageHits([])
     setShortcutOpen(true)
   }
+
+  useEffect(() => {
+    if (!shortcutOpen || shortcutMode !== 'new') return
+    const name = shortcutForm.name.trim()
+    if (name.length < 3) return
+    const local = keywordImage(name)
+    if (!local) return
+    setShortcutForm((prev) => (prev.imageUrl ? prev : { ...prev, imageUrl: local }))
+  }, [shortcutForm.name, shortcutOpen, shortcutMode])
 
   async function createShortcut(e) {
     e.preventDefault()
@@ -1197,14 +1233,14 @@ export default function QuickSalePage() {
                     const pinned = isOnBoard(product.id)
                     return (
                       <div key={product.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-950 border border-slate-800">
-                        <div className="min-w-0">
+                        <div className="min-w-0 cursor-pointer" onClick={() => setImageTarget(product)}>
                           <div className="text-xs font-bold truncate">{product.name}</div>
                           <div className="text-[10px] text-slate-400 font-mono">{money(product.salePrice)}</div>
                         </div>
                         {pinned ? (
                           <button type="button" onClick={() => unpinFromBoard(product.id)} className="px-2 py-1 rounded-lg bg-rose-700 text-[11px] font-bold">Kaldır</button>
                         ) : (
-                          <button type="button" onClick={() => { pinToBoard(product.id); setProducts((prev) => prev.some((item) => sameId(item.id, product.id)) ? prev : [...prev, product]); setShortcutOpen(false); setMessage(`${product.name} eklendi.`) }} className="px-2 py-1 rounded-lg bg-emerald-600 text-[11px] font-bold">+ Ekle</button>
+                          <button type="button" onClick={() => { setImageTarget(product); pinToBoard(product.id); setProducts((prev) => prev.some((item) => sameId(item.id, product.id)) ? prev : [...prev, product]); if (!productImage(product)) findShortcutImage(product.name, (url) => saveImage(product.id, url)); setMessage(`${product.name} eklendi.`) }} className="px-2 py-1 rounded-lg bg-emerald-600 text-[11px] font-bold">+ Ekle</button>
                         )}
                       </div>
                     )
@@ -1220,21 +1256,58 @@ export default function QuickSalePage() {
                   <input value={shortcutForm.vatRate} onChange={(e) => setShortcutForm({ ...shortcutForm, vatRate: e.target.value })} placeholder="KDV %" className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
                   <input value={shortcutForm.stockQuantity} onChange={(e) => setShortcutForm({ ...shortcutForm, stockQuantity: e.target.value })} placeholder="Stok" className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
                 </div>
-                <label className="block text-[11px] text-slate-400">
-                  Dosyadan resim seç
-                  <input type="file" accept="image/*" className="mt-1 block w-full text-xs" onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    const reader = new FileReader()
-                    reader.onload = () => setShortcutForm((prev) => ({ ...prev, imageUrl: String(reader.result || '') }))
-                    reader.readAsDataURL(file)
-                  }} />
-                </label>
-                {shortcutForm.imageUrl && <img src={shortcutForm.imageUrl} alt="" className="h-16 w-16 object-cover rounded-xl" />}
                 {shortcutError && <p className="text-xs text-red-300">{shortcutError}</p>}
                 <button type="submit" className="w-full py-2.5 rounded-xl bg-emerald-600 font-black">Kaydet ve tuşa ekle</button>
               </form>
             )}
+            <div className="rounded-2xl border border-slate-700 bg-slate-950 p-3 space-y-2">
+              <div className="text-[11px] font-bold text-slate-300">Ürün görseli <span className="text-emerald-300">Otomatik / Yükle</span></div>
+              <div className="flex items-center gap-2">
+                {(shortcutMode === 'new' ? shortcutForm.imageUrl : (imageTarget && productImage(imageTarget))) ? (
+                  <img src={shortcutMode === 'new' ? shortcutForm.imageUrl : productImage(imageTarget)} alt="" className="h-16 w-16 rounded-xl object-cover border border-emerald-500/40" />
+                ) : (
+                  <div className="h-16 w-16 rounded-xl border border-dashed border-slate-600 flex items-center justify-center text-[10px] text-slate-400 text-center">Görsel yok</div>
+                )}
+                <div className="flex-1 space-y-1.5">
+                  <div className="flex gap-1.5">
+                    <button type="button" disabled={imageBusy} onClick={() => findShortcutImage(shortcutMode === 'new' ? shortcutForm.name : (imageTarget?.name || shortcutSearch), (url) => {
+                      if (shortcutMode === 'new') setShortcutForm((prev) => ({ ...prev, imageUrl: url }))
+                      else if (imageTarget) saveImage(imageTarget.id, url)
+                    })} className="flex-1 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-bold">{imageBusy ? 'Aranıyor...' : 'Otomatik resim bul'}</button>
+                    <a className="py-1.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-bold" target="_blank" rel="noreferrer" href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(((shortcutMode === 'new' ? shortcutForm.name : (imageTarget?.name || shortcutSearch)) || 'ürün') + ' ürün')}`}>Google'da ara</a>
+                  </div>
+                  <label className="block text-[10px] text-slate-400">
+                    Dosya seç
+                    <input type="file" accept="image/*" className="mt-1 block w-full text-[10px]" onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (!file) return
+                      const reader = new FileReader()
+                      reader.onload = () => {
+                        const url = String(reader.result || '')
+                        if (shortcutMode === 'new') setShortcutForm((prev) => ({ ...prev, imageUrl: url }))
+                        else if (imageTarget) saveImage(imageTarget.id, url)
+                        else setImageNote('Önce listeden bir ürün seç.')
+                      }
+                      reader.readAsDataURL(file)
+                    }} />
+                  </label>
+                </div>
+              </div>
+              {imageNote && <p className="text-[11px] text-emerald-300">{imageNote}</p>}
+              <div className="text-[10px] text-slate-400">Hazır görsel</div>
+              <div className="grid grid-cols-6 gap-1.5">
+                {READY_IMAGES.map((preset) => (
+                  <button key={preset.label} type="button" title={preset.label} onClick={() => {
+                    if (shortcutMode === 'new') setShortcutForm((prev) => ({ ...prev, imageUrl: preset.url }))
+                    else if (imageTarget) saveImage(imageTarget.id, preset.url)
+                    else setImageNote('Önce listeden bir ürün seç.')
+                  }} className="h-10 rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+                    <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
