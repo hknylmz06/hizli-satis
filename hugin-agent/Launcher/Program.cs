@@ -23,30 +23,12 @@ var agentExe = Path.Combine(installDir, "HizliSatis.HuginAgent.exe");
 var launcherExe = Environment.ProcessPath ?? Path.Combine(installDir, "HizliSatis.AgentLauncher.exe");
 
 if (string.Equals(command, "install", StringComparison.OrdinalIgnoreCase))
-{
-    // Bu launcher'ı install dir'e kopyala
-    var targetLauncher = Path.Combine(installDir, "HizliSatis.AgentLauncher.exe");
-    try
-    {
-        if (!string.Equals(launcherExe, targetLauncher, StringComparison.OrdinalIgnoreCase))
-            File.Copy(launcherExe, targetLauncher, overwrite: true);
-    }
-    catch { /* ignore */ }
+    return Install(installDir, launcherExe, agentExe);
 
-    // Agent exe yoksa uyarı
-    if (!File.Exists(agentExe))
-    {
-        Console.WriteLine("Önce ajanı publish edin: publish-agent.ps1");
-        Console.WriteLine($"Beklenen: {agentExe}");
-        return 1;
-    }
-
-    RegisterProtocol(targetLauncher);
-    RegisterStartup(targetLauncher);
-    StartAgentHidden(agentExe);
-    Console.WriteLine("Kurulum tamam. Ajan gizli başlatıldı ve Windows açılışında otomatik gelecek.");
-    return 0;
-}
+var sourceDir = Path.GetDirectoryName(launcherExe);
+var siblingAgent = sourceDir is null ? null : Path.Combine(sourceDir, "HizliSatis.HuginAgent.exe");
+if (!File.Exists(agentExe) && siblingAgent is not null && File.Exists(siblingAgent))
+    return Install(installDir, launcherExe, agentExe);
 
 // start
 if (!File.Exists(agentExe))
@@ -67,6 +49,41 @@ if (!IsPortOpen(5055))
     StartAgentHidden(agentExe);
 
 return 0;
+
+static int Install(string installDir, string launcherExe, string agentExe)
+{
+    var targetLauncher = Path.Combine(installDir, "HizliSatis.AgentLauncher.exe");
+    var sourceDir = Path.GetDirectoryName(launcherExe);
+    var siblingAgent = sourceDir is null ? null : Path.Combine(sourceDir, "HizliSatis.HuginAgent.exe");
+    try
+    {
+        if (siblingAgent is not null &&
+            File.Exists(siblingAgent) &&
+            !string.Equals(Path.GetFullPath(siblingAgent), Path.GetFullPath(agentExe), StringComparison.OrdinalIgnoreCase))
+            File.Copy(siblingAgent, agentExe, overwrite: true);
+    }
+    catch { /* çalışan kopya kilitliyse kurulu dosya durur */ }
+
+    try
+    {
+        if (!string.Equals(Path.GetFullPath(launcherExe), Path.GetFullPath(targetLauncher), StringComparison.OrdinalIgnoreCase))
+            File.Copy(launcherExe, targetLauncher, overwrite: true);
+    }
+    catch { /* ignore */ }
+
+    if (!File.Exists(agentExe))
+    {
+        Console.WriteLine("Ajan dosyası bulunamadı. Kur ile aynı klasörde HizliSatis.HuginAgent.exe olmalı.");
+        return 1;
+    }
+
+    RegisterProtocol(targetLauncher);
+    RegisterStartup(targetLauncher);
+    if (!IsPortOpen(5055))
+        StartAgentHidden(agentExe);
+    Console.WriteLine("Kurulum tamam. Ajan gizli başlatıldı ve Windows açılışında otomatik gelecek.");
+    return 0;
+}
 
 static void RegisterProtocol(string launcherPath)
 {

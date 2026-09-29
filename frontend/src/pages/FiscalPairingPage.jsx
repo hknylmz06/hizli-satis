@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { ensureHuginAgent } from '../huginAgent'
 
 const empty = {
   deviceHost: '192.168.1.24',
@@ -25,6 +26,7 @@ export default function FiscalPairingPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [agentOnline, setAgentOnline] = useState(null)
+  const [installing, setInstalling] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -117,7 +119,7 @@ export default function FiscalPairingPage() {
 
     const online = await pingAgent(agentBase)
     if (!online) {
-      setError('Yerel ajan çalışmıyor. PC’de publish-agent.ps1 çalıştırın (port 5055).')
+      setError('Yerel ajan çalışmıyor. Ajanı kur düğmesine bas, inen dosyada Kur’u bir kez çalıştır.')
       setTesting(false)
       return
     }
@@ -187,6 +189,29 @@ export default function FiscalPairingPage() {
     }
   }
 
+  async function installAgent() {
+    setInstalling(true)
+    setError('')
+    setMessage('Ajan aranıyor...')
+    try {
+      const woke = await ensureHuginAgent()
+      if (woke.ok) {
+        setAgentOnline(true)
+        setMessage('Ajan çalışıyor. Eşleşmeyi test edebilirsin.')
+        return
+      }
+      const link = document.createElement('a')
+      link.href = '/agent/HizliSatisAgent-Kur.zip'
+      link.download = 'HizliSatisAgent-Kur.zip'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setMessage('Kurulum dosyası indi. Zip’i aç, Kur dosyasına bir kez bas, Windows onayını kabul et. Sonra bu sayfayı yenile.')
+    } finally {
+      setInstalling(false)
+    }
+  }
+
   if (loading) return <p>Yükleniyor...</p>
 
   return (
@@ -204,6 +229,11 @@ export default function FiscalPairingPage() {
         <span className={`pill ${agentOnline ? 'ok' : 'warn'}`}>
           Ajan: {agentOnline === null ? '...' : agentOnline ? 'Çevrimiçi' : 'Kapalı'}
         </span>
+        {!agentOnline && (
+          <button type="button" className="primary" onClick={installAgent} disabled={installing}>
+            {installing ? 'Hazırlanıyor...' : 'Ajanı kur'}
+          </button>
+        )}
         {form.deviceBaseUrl && <span className="pill">Cihaz: {form.deviceBaseUrl}</span>}
       </div>
 
@@ -281,6 +311,7 @@ export default function FiscalPairingPage() {
       <section className="panel" style={{ marginTop: '1rem' }}>
         <h2>Doğru eşleşme</h2>
         <ol className="help-list">
+          <li>Ajan kapalıysa <strong>Ajanı kur</strong> de. İnen zip içinde Kur’a bir kez bas.</li>
           <li>Yazarkasa ile bu PC aynı Wi‑Fi’de olsun.</li>
           <li>IP + VKN kaydet → <strong>Eşleşmeyi Test Et</strong>.</li>
           <li>Başarılı olunca satışta fiş basılır.</li>
