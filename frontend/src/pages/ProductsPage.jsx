@@ -160,7 +160,7 @@ export default function ProductsPage() {
 
   async function lookupBarcode() {
     const code = form.barcode.trim()
-    if (!code) return
+    if (!code || code.length < 3 || editingId) return
     try {
       const found = await api(`/api/products/by-barcode/${encodeURIComponent(code)}`, { token: session.token })
       setForm((prev) => ({
@@ -168,9 +168,26 @@ export default function ProductsPage() {
         name: found.name || prev.name,
         salePrice: found.salePrice ?? prev.salePrice,
         vatRate: found.vatRate ?? prev.vatRate,
+        unit: found.unit || prev.unit,
         purchasePrice: found.purchasePrice ?? prev.purchasePrice
       }))
-      setLookup('Bu barkod zaten stokta var.')
+      setLookup('Bu barkod zaten bu firmanın stoğunda var.')
+      return
+    } catch {
+      /* stokta yok, ana kataloğa bak */
+    }
+    try {
+      const found = await api(`/api/catalog/barcode/${encodeURIComponent(code)}`, { token: session.token })
+      const category = categories.find((c) => c.name && found.categoryName && c.name.toLowerCase() === String(found.categoryName).toLowerCase())
+      setForm((prev) => ({
+        ...prev,
+        name: found.name || prev.name,
+        salePrice: Number(found.salePrice) > 0 ? found.salePrice : prev.salePrice,
+        vatRate: found.vatRate ?? prev.vatRate,
+        unit: found.unit || prev.unit,
+        categoryId: category ? String(category.id) : prev.categoryId
+      }))
+      setLookup(`Ana katalogda bulundu: ${found.name}`)
     } catch {
       setLookup('Kayıtlarda bu barkod yok. Yeni kart olarak kaydedebilirsin.')
     }
@@ -544,6 +561,8 @@ export default function ProductsPage() {
                   <input
                     value={form.barcode}
                     onChange={(e) => { setForm({ ...form, barcode: e.target.value }); setLookup('') }}
+                    onBlur={() => lookupBarcode()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookupBarcode() } }}
                     placeholder="Barkod Okutun veya Yazın..."
                     className="font-mono"
                     required={!editingId}

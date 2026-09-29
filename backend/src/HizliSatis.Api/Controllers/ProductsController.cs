@@ -1,17 +1,23 @@
 using HizliSatis.Api.Contracts;
+using HizliSatis.Domain.Master;
 using HizliSatis.Domain.Tenant;
+using HizliSatis.Infrastructure.Persistence;
 using HizliSatis.Infrastructure.Services;
 using HizliSatis.Infrastructure.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace HizliSatis.Api.Controllers;
 
 [ApiController]
 [Authorize(Roles = "TenantUser")]
 [Route("api/products")]
-public class ProductsController(TenantDbContextFactory tenantDbFactory) : ControllerBase
+public class ProductsController(
+    TenantDbContextFactory tenantDbFactory,
+    MasterDbContext master,
+    ILogger<ProductsController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? q, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
@@ -117,6 +123,7 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
         await db.SaveChangesAsync(ct);
         FifoStock.AddOpening(db, product);
         await db.SaveChangesAsync(ct);
+        await RememberInCatalogAsync(db, product, ct);
         return Ok(Shape(product));
     }
 
@@ -158,6 +165,7 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
         }
 
         await db.SaveChangesAsync(ct);
+        await RememberInCatalogAsync(db, product, ct);
         return Ok(Shape(product));
     }
 
@@ -264,4 +272,61 @@ public class ProductsController(TenantDbContextFactory tenantDbFactory) : Contro
         product.UnitType,
         product.Image
     };
+
+    private async Task RememberInCatalogAsync(TenantDbContext db, Product product, CancellationToken ct)
+    {
+        var code = product.Barcode?.Trim();
+        if (string.IsNullOrWhiteSpace(code) || code.Length < 3 || code.StartsWith("DEPT", StringComparison.OrdinalIgnoreCase))
+            return;
+        if (string.IsNullOrWhiteSpace(product.Name))
+            return;
+
+        try
+        {
+            string? categoryName = null;
+            if (product.CategoryId is int categoryId)
+            {
+                categoryName = await db.Categories.AsNoTracking()
+                    .Where(c => c.Id == categoryId)
+                    .Select(c => c.Name)
+                    .FirstOrDefaultAsync(ct);
+            }
+
+            var existing = await master.CatalogProducts.FirstOrDefaultAsync(x => x.Barcode == code, ct);
+            if (existing is null)
+            {
+                master.CatalogProducts.Add(new CatalogProduct
+                {
+                    Barcode = code,
+                    Name = product.Name.Trim(),
+                    CategoryName = categoryName,
+                    Unit = string.IsNullOrWhiteSpace(product.Unit) ? "Adet" : product.Unit!,
+                    VatRate = product.VatRate,
+                    SalePrice = product.SalePrice,
+                    IsDomestic = product.IsDomestic ?? true,
+                    OriginCountry = string.IsNullOrWhiteSpace(product.OriginCountry) ? "TR" : product.OriginCountry.Trim(),
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                existing.Name = product.Name.Trim();
+                existing.CategoryName = categoryName;
+                if (!string.IsNullOrWhiteSpace(product.Unit))
+                    existing.Unit = product.Unit;
+                existing.VatRate = product.VatRate;
+                existing.SalePrice = product.SalePrice;
+                existing.IsDomestic = product.IsDomestic ?? existing.IsDomestic;
+                if (!string.IsNullOrWhiteSpace(product.OriginCountry))
+                    existing.OriginCountry = product.OriginCountry.Trim();
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await master.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Barkod ana kataloğa yazılamadı: {Barcode}", code);
+        }
+    }
 }
