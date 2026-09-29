@@ -3,11 +3,11 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 
 const empty = {
-  deviceHost: '',
+  deviceHost: '192.168.1.24',
   devicePort: 4443,
-  serialNo: '',
-  softwareId: '',
-  hardwareId: '',
+  serialNo: 'FU00022547',
+  softwareId: '9217033991',
+  hardwareId: 'ABCD1234',
   agentBaseUrl: 'http://127.0.0.1:5055',
   isEnabled: true,
   isPaired: false,
@@ -36,7 +36,7 @@ export default function FiscalPairingPage() {
         devicePort: data.devicePort || 4443,
         serialNo: data.serialNo || '',
         softwareId: data.softwareId || '',
-        hardwareId: data.hardwareId || '',
+        hardwareId: data.hardwareId || 'ABCD1234',
         agentBaseUrl: data.agentBaseUrl || 'http://127.0.0.1:5055',
         isEnabled: data.isEnabled ?? true,
         isPaired: data.isPaired ?? false,
@@ -52,8 +52,9 @@ export default function FiscalPairingPage() {
   }
 
   async function pingAgent(baseUrl) {
+    const base = baseUrl.replace(/\/$/, '')
     try {
-      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, { method: 'GET' })
+      const res = await fetch(`${base}/health`, { method: 'GET', cache: 'no-store' })
       setAgentOnline(res.ok)
       return res.ok
     } catch {
@@ -116,7 +117,7 @@ export default function FiscalPairingPage() {
 
     const online = await pingAgent(agentBase)
     if (!online) {
-      setError('Yerel ajan çalışmıyor. PC’de Hugin Agent’ı başlatın (port 5055).')
+      setError('Yerel ajan çalışmıyor. PC’de publish-agent.ps1 çalıştırın (port 5055).')
       setTesting(false)
       return
     }
@@ -126,6 +127,14 @@ export default function FiscalPairingPage() {
       setTesting(false)
       return
     }
+    if (!form.softwareId.trim()) {
+      setError('Software Id = firma VKN zorunlu.')
+      setTesting(false)
+      return
+    }
+
+    // Masaüstü Hızlı Satış köprüsü ile aynı varsayılan: ABCD1234
+    const hardwareId = (form.hardwareId || 'ABCD1234').trim()
 
     try {
       const res = await fetch(`${agentBase}/pair/test`, {
@@ -135,8 +144,8 @@ export default function FiscalPairingPage() {
           deviceHost: form.deviceHost.trim(),
           devicePort: Number(form.devicePort) || 4443,
           serialNo: form.serialNo || null,
-          softwareId: form.softwareId || null,
-          hardwareId: form.hardwareId || null
+          softwareId: form.softwareId.trim() || '9217033991',
+          hardwareId
         })
       })
       const result = await res.json()
@@ -145,12 +154,32 @@ export default function FiscalPairingPage() {
         token: session.token,
         body: {
           success: !!result.ok,
-          statusMessage: result.message || (result.ok ? 'Eşleşti' : 'Başarısız')
+          statusMessage: result.message || (result.ok ? 'Eşleşti' : 'Başarısız'),
+          serialNo: result.serialNo || null,
+          hardwareId: result.hardwareId || hardwareId
         }
       })
+      if (result.ok || result.hardwareId || result.serialNo) {
+        await api('/api/fiscal/settings', {
+          method: 'PUT',
+          token: session.token,
+          body: {
+            deviceHost: form.deviceHost,
+            devicePort: Number(form.devicePort),
+            serialNo: result.serialNo || form.serialNo || null,
+            softwareId: form.softwareId || '9217033991',
+            hardwareId: result.hardwareId || hardwareId,
+            agentBaseUrl: form.agentBaseUrl,
+            isEnabled: true
+          }
+        })
+      }
       await load()
-      if (result.ok) setMessage(result.message)
-      else setError(result.message || 'Eşleşme başarısız')
+      if (result.ok) {
+        setMessage(result.message + (result.serialNo ? ` Seri: ${result.serialNo}` : ''))
+      } else {
+        setError(result.message || 'Eşleşme başarısız')
+      }
     } catch (err) {
       setError(err.message || 'Test isteği başarısız')
     } finally {
@@ -161,10 +190,11 @@ export default function FiscalPairingPage() {
   if (loading) return <p>Yükleniyor...</p>
 
   return (
-    <div>
+    <div className="p-6">
       <h1>Yazarkasa Eşleştirme</h1>
       <p className="muted">
-        Hugin S1 WiFi IP bilgisini girin. Test için bu PC’de yerel ajanın çalışması gerekir.
+        Masaüstü Hızlı Satış ile aynı kimlik kullanılır (SoftwareId + HardwareId ABCD1234).
+        IP’yi yazıp eşleşmeyi test etmen yeterli.
       </p>
 
       <div className="status-row">
@@ -183,7 +213,7 @@ export default function FiscalPairingPage() {
           <input
             value={form.deviceHost}
             onChange={(e) => setField('deviceHost', e.target.value)}
-            placeholder="Örn: 192.168.1.45"
+            placeholder="Örn: 192.168.1.24"
             required
           />
         </label>
@@ -198,17 +228,25 @@ export default function FiscalPairingPage() {
           />
         </label>
         <label>
-          Seri No (opsiyonel)
-          <input value={form.serialNo} onChange={(e) => setField('serialNo', e.target.value)} />
+          Software Id (firma VKN)
+          <input
+            value={form.softwareId}
+            onChange={(e) => setField('softwareId', e.target.value)}
+            placeholder="Örn: 9217033991"
+            required
+          />
         </label>
         <label>
-          Software Id (opsiyonel)
-          <input value={form.softwareId} onChange={(e) => setField('softwareId', e.target.value)} />
+          Seri No (boş bırakılabilir — eşleşmede otomatik gelir)
+          <input
+            value={form.serialNo}
+            onChange={(e) => setField('serialNo', e.target.value)}
+            placeholder="FU..."
+          />
         </label>
-        <label>
-          Hardware Id (opsiyonel)
-          <input value={form.hardwareId} onChange={(e) => setField('hardwareId', e.target.value)} />
-        </label>
+        <p className="muted">
+          Hardware Id masaüstü köprüden alındı: <code>ABCD1234</code> (elle girmen gerekmez).
+        </p>
         <label>
           Yerel Ajan Adresi
           <input
@@ -241,11 +279,11 @@ export default function FiscalPairingPage() {
       </form>
 
       <section className="panel" style={{ marginTop: '1rem' }}>
-        <h2>Nasıl kullanılır?</h2>
+        <h2>Doğru eşleşme</h2>
         <ol className="help-list">
-          <li>Yazarkasa ile PC aynı WiFi’de olsun.</li>
-          <li>Bu PC’de ajanı çalıştır: <code>dotnet run --project hugin-agent</code></li>
-          <li>Yukarıya yazarkasa IP’sini yaz → Kaydet → Eşleşmeyi Test Et.</li>
+          <li>Yazarkasa ile bu PC aynı Wi‑Fi’de olsun.</li>
+          <li>IP + VKN kaydet → <strong>Eşleşmeyi Test Et</strong>.</li>
+          <li>Başarılı olunca satışta fiş basılır.</li>
         </ol>
       </section>
     </div>

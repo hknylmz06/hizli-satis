@@ -4,5 +4,6 @@ public enum PaymentMethod
 {
     Nakit = 0,
     KrediKarti = 1,
-    Veresiye = 2
+    Veresiye = 2,
+    Parcali = 3
 }

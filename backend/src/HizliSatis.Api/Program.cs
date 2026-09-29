@@ -4,13 +4,14 @@ using HizliSatis.Infrastructure;
 using HizliSatis.Infrastructure.Options;
 using HizliSatis.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -56,6 +57,12 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
     ?? ["http://localhost:5173", "http://127.0.0.1:5173"];
@@ -81,6 +88,9 @@ builder.Services.AddCors(options =>
                 if (host.EndsWith(".onrender.com", StringComparison.OrdinalIgnoreCase)) return true;
                 if (host.Equals("inposm530.com", StringComparison.OrdinalIgnoreCase)) return true;
                 if (host.Equals("www.inposm530.com", StringComparison.OrdinalIgnoreCase)) return true;
+                if (host.Equals("barkod.huginyazarkasa.com", StringComparison.OrdinalIgnoreCase)) return true;
+                if (host.Equals("huginyazarkasa.com", StringComparison.OrdinalIgnoreCase)) return true;
+                if (host.Equals("www.huginyazarkasa.com", StringComparison.OrdinalIgnoreCase)) return true;
                 return false;
             })
             .AllowAnyHeader()
@@ -91,16 +101,27 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var seeder = scope.ServiceProvider.GetRequiredService<MasterSeedService>();
-    await seeder.InitializeAsync();
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    try
+    {
+        var store = scope.ServiceProvider.GetRequiredService<SqlServerSettingsStore>();
+        await store.EnsureMasterDatabaseAsync();
+        var seeder = scope.ServiceProvider.GetRequiredService<MasterSeedService>();
+        await seeder.InitializeAsync();
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "SQL Server bağlantısı kurulamadı. Yayın yerinde SqlServer__Server, SqlServer__User ve SqlServer__Password dolu olmalı.");
+    }
 }
 
-if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+app.UseForwardedHeaders();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.UseCors("frontend");
@@ -116,6 +137,21 @@ if (Directory.Exists(wwwroot))
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = provider });
     app.UseStaticFiles(new StaticFileOptions { FileProvider = provider });
     app.MapFallbackToFile("index.html", new StaticFileOptions { FileProvider = provider });
+}
+else if (app.Environment.IsDevelopment())
+{
+    app.MapFallback(context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        }
+
+        var target = "http://localhost:5173" + context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+        context.Response.Redirect(target);
+        return Task.CompletedTask;
+    });
 }
 
 app.Run();

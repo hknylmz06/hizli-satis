@@ -22,8 +22,7 @@ COPY --from=frontend /frontend/dist/ /app/publish/wwwroot/
 # ---- Runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
-ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
 COPY --from=build /app/publish .
-ENTRYPOINT ["dotnet", "HizliSatis.Api.dll"]
+CMD ASPNETCORE_URLS=http://+:${PORT:-8080} dotnet HizliSatis.Api.dll

@@ -17,7 +17,11 @@ public record FiscalSettingsRequest(
     string? AgentBaseUrl,
     bool IsEnabled);
 
-public record FiscalPairResultRequest(bool Success, string? StatusMessage);
+public record FiscalPairResultRequest(
+    bool Success,
+    string? StatusMessage,
+    string? SerialNo,
+    string? HardwareId);
 
 [ApiController]
 [Authorize(Roles = "TenantUser")]
@@ -84,6 +88,10 @@ public class FiscalController(TenantDbContextFactory tenantDbFactory) : Controll
         settings.UpdatedAt = DateTime.UtcNow;
         if (request.Success)
             settings.IsEnabled = true;
+        if (!string.IsNullOrWhiteSpace(request.SerialNo))
+            settings.SerialNo = request.SerialNo.Trim();
+        if (!string.IsNullOrWhiteSpace(request.HardwareId))
+            settings.HardwareId = request.HardwareId.Trim();
 
         await db.SaveChangesAsync(ct);
         return Ok(Map(settings));

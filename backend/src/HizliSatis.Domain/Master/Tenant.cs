@@ -4,7 +4,7 @@ namespace HizliSatis.Domain.Master;
 
 public class Tenant
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string FirmaKodu { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
@@ -16,5 +16,9 @@ public class Tenant
     public string? InitialUsername { get; set; }
     public string? InitialPasswordPlain { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime LicenseExpiresAt { get; set; } = DateTime.UtcNow.AddYears(1);
     public DateTime? ProvisionedAt { get; set; }
+
+    public bool IsLicenseActive(DateTime? utcNow = null) =>
+        LicenseExpiresAt > (utcNow ?? DateTime.UtcNow);
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import DatabaseServerPanel from './DatabaseServerPanel'
 
 export default function AdminPage() {
   const { session, logout } = useAuth()
@@ -54,8 +55,32 @@ export default function AdminPage() {
     await openTenant(id)
   }
 
+  async function renewLicense(id) {
+    setError('')
+    const data = await api(`/api/admin/tenants/${id}/renew-license`, {
+      method: 'POST',
+      token: session.token
+    })
+    setMessage(data.message || 'Lisans 1 yıl uzatıldı.')
+    await load()
+    if (selected?.id === id) await openTenant(id)
+  }
+
+  function formatDate(value) {
+    if (!value) return '-'
+    return new Date(value).toLocaleDateString('tr-TR')
+  }
+
+  function licenseLabel(tenant) {
+    const end = new Date(tenant.licenseExpiresAt)
+    const days = Math.ceil((end.getTime() - Date.now()) / 86400000)
+    if (!tenant.licenseExpiresAt || days <= 0) return { text: 'Ödeme bekliyor', cls: 'warn' }
+    if (days <= 30) return { text: `${days} gün kaldı`, cls: 'warn' }
+    return { text: 'Aktif', cls: 'ok' }
+  }
+
   return (
-    <div className="admin-shell">
+    <div className="admin-shell min-h-screen bg-slate-950 text-slate-100 legacy-page p-4">
       <header className="topbar">
         <div>
           <p className="brand">Hızlı Satış</p>
@@ -68,6 +93,9 @@ export default function AdminPage() {
       </header>
 
       <div className="admin-grid">
+        <div className="span-2">
+          <DatabaseServerPanel token={session.token} />
+        </div>
         <section>
           <h2>Yeni Firma</h2>
           <form className="stack" onSubmit={createTenant}>
@@ -101,8 +129,10 @@ export default function AdminPage() {
                 <tr>
                   <th>Ad</th>
                   <th>Kod</th>
+                  <th>Kayıt</th>
+                  <th>Lisans bitiş</th>
+                  <th>Lisans</th>
                   <th>Durum</th>
-                  <th>DB</th>
                   <th></th>
                 </tr>
               </thead>
@@ -111,10 +141,13 @@ export default function AdminPage() {
                   <tr key={t.id}>
                     <td>{t.name}</td>
                     <td><code>{t.firmaKodu}</code></td>
+                    <td>{formatDate(t.createdAt)}</td>
+                    <td>{formatDate(t.licenseExpiresAt)}</td>
+                    <td><span className={`pill ${licenseLabel(t).cls}`}>{licenseLabel(t).text}</span></td>
                     <td><span className={`status ${t.status?.toLowerCase()}`}>{t.status}</span></td>
-                    <td><code>{t.databaseName}</code></td>
                     <td>
                       <button type="button" onClick={() => openTenant(t.id)}>Detay</button>
+                      <button type="button" onClick={() => renewLicense(t.id)}>1 yıl uzat</button>
                       {t.status !== 'Ready' && (
                         <button type="button" onClick={() => reprovision(t.id)}>Yeniden Kur</button>
                       )}
@@ -131,6 +164,9 @@ export default function AdminPage() {
             <h2>{selected.name} — kurulum detayı</h2>
             <div className="detail-grid">
               <p><strong>Firma Kodu:</strong> {selected.firmaKodu}</p>
+              <p><strong>Kayıt:</strong> {formatDate(selected.createdAt)}</p>
+              <p><strong>Lisans bitiş:</strong> {formatDate(selected.licenseExpiresAt)}</p>
+              <p><strong>Lisans:</strong> {licenseLabel(selected).text}</p>
               <p><strong>Kullanıcı:</strong> {selected.initialUsername}</p>
               <p><strong>Şifre:</strong> {selected.initialPasswordPlain}</p>
               <p><strong>DB:</strong> {selected.databaseName}</p>

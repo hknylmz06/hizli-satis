@@ -10,11 +10,19 @@ export async function api(path, { method = 'GET', body, token } = {}) {
     body: body ? JSON.stringify(body) : undefined
   })
 
+  if (res.status === 401 && token) {
+    localStorage.removeItem('hizlisatis_auth')
+    sessionStorage.setItem('hizlisatis_auth_notice', 'Oturumun doldu. Tekrar giriş yap, kayıtlar veritabanına o zaman düşer.')
+    window.location.assign('/')
+    throw new Error('Oturumun doldu. Tekrar giriş yap.')
+  }
+
   if (!res.ok) {
-    let message = 'İstek başarısız'
+    let message = res.status === 401 ? 'Oturumun doldu. Tekrar giriş yap.' : 'İstek başarısız'
     try {
       const data = await res.json()
-      message = data.message || data.title || message
+      const fieldError = data.errors ? Object.values(data.errors).flat().find(Boolean) : null
+      message = data.message || fieldError || data.title || message
     } catch {
       /* ignore */
     }

@@ -9,9 +9,15 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: Database__AdminDatabase
-        value: neondb
-      - key: ConnectionStrings__Master
+      - key: SqlServer__Server
+        sync: false
+      - key: SqlServer__Port
+        value: "1433"
+      - key: SqlServer__MasterDatabase
+        value: HizliSatisMaster
+      - key: SqlServer__User
+        sync: false
+      - key: SqlServer__Password
         sync: false
       - key: Jwt__Key
         generateValue: true

@@ -19,7 +19,7 @@ public class JwtTokenService(IOptions<JwtOptions> options)
             issuer: _options.Issuer,
             audience: _options.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(_options.ExpireHours),
+            expires: DateTime.UtcNow.AddYears(10),
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
