@@ -35,7 +35,29 @@ const emptyProduct = {
   hasVariants: false,
   stockQuantity: '',
   purchasePrice: '',
-  pinShortcut: false
+  pinShortcut: false,
+  image: ''
+}
+
+function shrinkImage(url) {
+  return new Promise((resolve) => {
+    if (!url || !url.startsWith('data:image')) {
+      resolve(url)
+      return
+    }
+    const img = new Image()
+    img.onload = () => {
+      const max = 320
+      const scale = Math.min(1, max / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.width * scale))
+      canvas.height = Math.max(1, Math.round(img.height * scale))
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', 0.72))
+    }
+    img.onerror = () => resolve(url)
+    img.src = url
+  })
 }
 
 function ColorDots({ value, onChange }) {
@@ -176,7 +198,8 @@ export default function ProductsPage() {
         salePrice: found.salePrice ?? prev.salePrice,
         vatRate: found.vatRate ?? prev.vatRate,
         unit: found.unit || prev.unit,
-        purchasePrice: found.purchasePrice ?? prev.purchasePrice
+        purchasePrice: found.purchasePrice ?? prev.purchasePrice,
+        image: found.image || prev.image
       }))
       setLookup('Bu barkod zaten bu firmanın stoğunda var.')
       return
@@ -195,7 +218,8 @@ export default function ProductsPage() {
           salePrice: Number(found.salePrice) > 0 ? found.salePrice : prev.salePrice,
           vatRate: found.vatRate ?? prev.vatRate,
           unit: found.unit || prev.unit,
-          categoryId: category ? String(category.id) : prev.categoryId
+          categoryId: category ? String(category.id) : prev.categoryId,
+          image: found.image || prev.image
         }))
         setLookup(`${found.name} isimli ürün stokta yok. Kart bilgileri doldu.`)
         return
@@ -211,7 +235,8 @@ export default function ProductsPage() {
         salePrice: Number(found.salePrice) > 0 ? found.salePrice : prev.salePrice,
         vatRate: found.vatRate ?? prev.vatRate,
         unit: found.unit || prev.unit,
-        categoryId: category ? String(category.id) : prev.categoryId
+        categoryId: category ? String(category.id) : prev.categoryId,
+        image: found.image || prev.image
       }))
       setLookup(`${found.name} isimli ürün stokta yok. Kart bilgileri doldu.`)
     } catch {
@@ -275,7 +300,8 @@ export default function ProductsPage() {
       hasVariants: variants.length > 0,
       stockQuantity: product.stockQuantity ?? '',
       purchasePrice: product.purchasePrice ?? '',
-      pinShortcut: shortcutIds().some((id) => sameId(id, product.id))
+      pinShortcut: shortcutIds().some((id) => sameId(id, product.id)),
+      image: product.image || ''
     })
     setVariantRows(variants.map((row) => ({
       size: row.sizeName || '',
@@ -347,6 +373,12 @@ export default function ProductsPage() {
         }
       })
       const productId = saved?.id || editingId
+      if (productId && form.image) {
+        const image = await shrinkImage(form.image)
+        await api(`/api/products/${productId}/image`, { method: 'PUT', token: session.token, body: { image } })
+      } else if (productId && editingId) {
+        await api(`/api/products/${productId}/image`, { method: 'PUT', token: session.token, body: { image: null } })
+      }
       if (productId) await setShortcut(productId, form.pinShortcut)
       setShowModal(false)
       setEditingId(null)
@@ -755,6 +787,37 @@ export default function ProductsPage() {
                   </div>
                 </div>
               )}
+
+              <div className="p-3 rounded-xl border border-slate-700 bg-slate-800/60 space-y-2">
+                <span className="text-[11px] font-semibold text-slate-300">Ürün resmi</span>
+                <p className="text-[11px] text-slate-400">Dosyadan seç. Hızlı satış tuşuna bu resim kendiliğinden gelir.</p>
+                <div className="flex items-center gap-3">
+                  {form.image ? (
+                    <img src={form.image} alt="" className="h-16 w-16 rounded-xl object-cover border border-slate-600" />
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl border border-dashed border-slate-600 bg-slate-900" />
+                  )}
+                  <label className="cursor-pointer text-xs font-bold text-emerald-300">
+                    Dosyadan seç
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = () => setForm((prev) => ({ ...prev, image: String(reader.result || '') }))
+                        reader.readAsDataURL(file)
+                      }}
+                    />
+                  </label>
+                  {form.image && (
+                    <button type="button" className="text-xs text-rose-300" onClick={() => setForm((prev) => ({ ...prev, image: '' }))}>Kaldır</button>
+                  )}
+                </div>
+              </div>
 
               <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-700 bg-slate-800/80 cursor-pointer">
                 <input type="checkbox" className="mt-1 w-4 h-4" checked={form.pinShortcut} onChange={(e) => setForm({ ...form, pinShortcut: e.target.checked })} />

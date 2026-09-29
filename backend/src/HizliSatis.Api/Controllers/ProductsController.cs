@@ -112,7 +112,8 @@ public class ProductsController(
                     salePrice = x.SalePrice,
                     vatRate = x.VatRate,
                     x.Unit,
-                    categoryName = x.CategoryName
+                    categoryName = x.CategoryName,
+                    x.Image
                 })
                 .FirstOrDefaultAsync(ct);
         }
