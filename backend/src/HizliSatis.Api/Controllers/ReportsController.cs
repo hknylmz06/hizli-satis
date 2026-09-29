@@ -104,7 +104,7 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
             var bucket = sales.Where(s => s.SoldAt >= fromUtc && s.SoldAt < toUtc).ToList();
             var revenue = bucket.Sum(s => s.GrandTotal);
             var cost = bucket.Sum(s => s.CostTotal);
-            days.Add(new { date = day, revenue, cost, profit = revenue - cost, count = bucket.Count });
+            days.Add(new { date = day.ToString("yyyy-MM-dd"), revenue, cost, profit = revenue - cost, count = bucket.Count });
         }
 
         var productById = products.ToDictionary(p => p.Id);
@@ -160,7 +160,7 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
 
         var hours = Enumerable.Range(0, 24).Select(hour =>
         {
-            var bucket = sales.Where(s => ((s.SoldAt.Hour + 3) % 24) == hour).ToList();
+            var bucket = sales.Where(s => TurkeyHour(s.SoldAt) == hour).ToList();
             return new { hour, total = bucket.Sum(s => s.GrandTotal), count = bucket.Count };
         }).ToList();
 
@@ -169,8 +169,8 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
 
         return Ok(new
         {
-            from = startLocal,
-            to = endLocal.AddDays(-1),
+            from = startLocal.ToString("yyyy-MM-dd"),
+            to = endLocal.AddDays(-1).ToString("yyyy-MM-dd"),
             saleCount = sales.Count,
             kasa = new
             {
@@ -291,6 +291,12 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
     }
 
     private static readonly TimeSpan Turkey = TimeSpan.FromHours(3);
+
+    private static int TurkeyHour(DateTime value)
+    {
+        var utc = value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        return utc.Add(Turkey).Hour;
+    }
 
     private static (DateTime StartUtc, DateTime EndUtc, DateTime StartLocal, DateTime EndLocal) Range(DateTime? from, DateTime? to)
     {
