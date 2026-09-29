@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   ShoppingCart, FileText, TrendingUp, FolderTree, DollarSign, Landmark,
-  Settings, LogOut, LayoutDashboard, Users, UserCog, Truck, Headphones, Menu, X, ChevronLeft, ChevronRight
+  Settings, SlidersHorizontal, LogOut, LayoutDashboard, Users, UserCog, Truck, Headphones, Menu, X, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { useAuth } from '../auth'
 import { allows } from '../permissions'
@@ -33,6 +33,7 @@ const sections = [
     items: [
       { to: '/app/users', label: 'Kullanıcılar', icon: UserCog, perm: 'can_manage_users' },
       { to: '/app/fiscal', label: 'Sistem Ayarları', icon: Settings, perm: 'can_access_settings' },
+      { to: '/app/settings', label: 'Diğer Ayarlar', icon: SlidersHorizontal, perm: 'can_access_settings' },
       { to: '/app/support', label: 'Destek & İletişim', icon: Headphones }
     ]
   }

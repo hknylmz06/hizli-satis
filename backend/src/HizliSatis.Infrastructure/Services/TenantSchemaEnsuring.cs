@@ -382,6 +382,8 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'Products', N'U') IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_Barcode' AND object_id = OBJECT_ID(N'Products'))
                 CREATE INDEX [IX_Products_Barcode] ON [Products]([Barcode]);
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'AutoFiscalReceipt') IS NULL
+                ALTER TABLE [Settings] ADD [AutoFiscalReceipt] bit NOT NULL CONSTRAINT [DF_Settings_AutoFiscal] DEFAULT 1;
             IF OBJECT_ID(N'PosShortcuts', N'U') IS NULL
             BEGIN
                 CREATE TABLE [PosShortcuts] (
