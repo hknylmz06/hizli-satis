@@ -55,6 +55,42 @@ public static class TenantSchemaEnsuring
                     CONSTRAINT [PK_FiscalDevices] PRIMARY KEY ([Id])
                 );
             END
+            IF OBJECT_ID(N'FiscalRegisters', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [FiscalRegisters] (
+                    [Id] int IDENTITY(1,1) NOT NULL,
+                    [Name] nvarchar(80) NOT NULL,
+                    [Model] nvarchar(40) NOT NULL,
+                    [ConnectionType] nvarchar(8) NOT NULL,
+                    [DeviceHost] nvarchar(200) NOT NULL,
+                    [DevicePort] int NOT NULL,
+                    [ComPort] nvarchar(16) NULL,
+                    [BaudRate] int NOT NULL,
+                    [SerialNo] nvarchar(100) NULL,
+                    [SoftwareId] nvarchar(100) NULL,
+                    [HardwareId] nvarchar(100) NULL,
+                    [AgentBaseUrl] nvarchar(300) NOT NULL,
+                    [BridgeBaseUrl] nvarchar(300) NOT NULL,
+                    [UserId] int NULL,
+                    [IsEnabled] bit NOT NULL,
+                    [IsPaired] bit NOT NULL,
+                    [LastStatus] nvarchar(500) NULL,
+                    [LastPairedAt] datetimeoffset NULL,
+                    [UpdatedAt] datetimeoffset NOT NULL,
+                    CONSTRAINT [PK_FiscalRegisters] PRIMARY KEY ([Id])
+                );
+            END
+            IF OBJECT_ID(N'FiscalRegisters', N'U') IS NOT NULL
+               AND OBJECT_ID(N'FiscalDevices', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM [FiscalRegisters])
+                INSERT INTO [FiscalRegisters] (
+                    [Name], [Model], [ConnectionType], [DeviceHost], [DevicePort], [ComPort], [BaudRate],
+                    [SerialNo], [SoftwareId], [HardwareId], [AgentBaseUrl], [BridgeBaseUrl], [UserId],
+                    [IsEnabled], [IsPaired], [LastStatus], [LastPairedAt], [UpdatedAt])
+                SELECT N'Kasa 1', N'HUGIN S1', N'IP', [DeviceHost], [DevicePort], N'COM1', 115200,
+                    [SerialNo], [SoftwareId], [HardwareId], [AgentBaseUrl], N'http://127.0.0.1:8989', NULL,
+                    [IsEnabled], [IsPaired], [LastStatus], [LastPairedAt], [UpdatedAt]
+                FROM [FiscalDevices];
             """,
             ct);
         Mark(key);

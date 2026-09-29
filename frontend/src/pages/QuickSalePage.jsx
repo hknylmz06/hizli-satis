@@ -510,14 +510,50 @@ export default function QuickSalePage() {
     setDeptAmount('')
   }
 
+  function isS1Device(device = fiscal) {
+    return String(device?.model || 'HUGIN S1').toUpperCase().includes('S1')
+  }
+
+  function fiscalReady(device = fiscal) {
+    if (!device?.isEnabled || !device?.isPaired) return false
+    if ((device.connectionType || 'IP') === 'COM') return !!device.comPort
+    return !!device.deviceHost
+  }
+
   function fiscalIdentity() {
     return {
       deviceHost: fiscal.deviceHost,
-      devicePort: fiscal.devicePort || 4443,
+      devicePort: fiscal.devicePort || (isS1Device() ? 4443 : 4444),
       serialNo: fiscal.serialNo || null,
       softwareId: fiscal.softwareId || null,
-      hardwareId: fiscal.hardwareId || null
+      hardwareId: fiscal.hardwareId || 'ABCD1234'
     }
+  }
+
+  function bridgeBody() {
+    return {
+      portName: fiscal.comPort || 'COM1',
+      baudRate: Number(fiscal.baudRate) || 115200,
+      fiscalId: fiscal.serialNo || '',
+      model: fiscal.model || 'HUGIN T300',
+      softwareId: fiscal.softwareId || '',
+      hardwareId: fiscal.hardwareId || 'ABCD1234',
+      connectionType: fiscal.connectionType || 'IP',
+      ip: fiscal.deviceHost || '',
+      tcpPort: Number(fiscal.devicePort) || 4444
+    }
+  }
+
+  async function postBridge(path, body) {
+    const base = (fiscal?.bridgeBaseUrl || 'http://127.0.0.1:8989').replace(/\/$/, '')
+    const res = await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {})
+    })
+    const data = await res.json().catch(() => null)
+    if (!data) throw new Error('Yazarkasa köprüsü yanıt vermedi. Bu kasada masaüstü Hugin servisi açık olmalı.')
+    return data
   }
 
   async function postAgent(path, extra) {
@@ -531,7 +567,36 @@ export default function QuickSalePage() {
   }
 
   async function printFiscalReceipt(cartSnapshot, payMethod, payable, split) {
-    if (!fiscal?.isEnabled || !fiscal?.isPaired || !fiscal?.deviceHost) return { skipped: true }
+    if (!fiscalReady()) return { skipped: true }
+    if (!isS1Device()) {
+      try {
+        const connected = await postBridge('/api/connect', bridgeBody())
+        if (!connected.connected || connected.simulation) {
+          return { ok: false, message: connected.message || 'T300 yazarkasasına bağlanılamadı. Sepet duruyor.' }
+        }
+        const payments = payMethod === 'Parcali' && split
+          ? [{ type: 'CASH', amount: split.cash }, { type: 'CREDIT', amount: split.card }].filter((row) => row.amount > 0)
+          : [{ type: payMethod === 'KrediKarti' ? 'CREDIT' : 'CASH', amount: payable }]
+        const data = await postBridge('/api/sale', {
+          items: cartSnapshot.map((item) => ({
+            name: item.name,
+            barcode: item.barcode || '',
+            quantity: item.quantity,
+            price: item.unitPrice,
+            vatRate: item.vatRate ?? 20
+          })),
+          payments,
+          discountAmount: 0,
+          notes: 'POS Satış'
+        })
+        const ok = !!(data.success || data.status === 'ok') && !data.simulation
+        const message = data.message || ''
+        const paper = /paper|kagit|kağıt|no_paper/i.test(message)
+        return { ok, message: message || (ok ? 'Fiş basıldı.' : 'Ödeme alınamadı. Yazarkasadan onay gelmedi.'), paper, documentId: data.documentId || null }
+      } catch (err) {
+        return { ok: false, message: err.message || 'Ödeme alınamadı. Yazarkasadan onay gelmedi.' }
+      }
+    }
     const agentBase = (fiscal.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
     try {
       const health = await fetch(`${agentBase}/health`, { cache: 'no-store' })
@@ -600,8 +665,10 @@ export default function QuickSalePage() {
     if (!paperModal) return
     setPaperModal((prev) => prev && ({ ...prev, loading: 'resume', error: '' }))
     try {
-      const data = await postAgent('/document/resume', { documentId: paperModal.documentId })
-      if (!data?.ok) throw new Error(data?.message || 'Fiş devam ettirilemedi.')
+      const data = isS1Device()
+        ? await postAgent('/document/resume', { documentId: paperModal.documentId })
+        : await postBridge('/api/document/resume', { documentId: paperModal.documentId })
+      if (!(data?.ok || data?.success || data?.status === 'ok')) throw new Error(data?.message || 'Fiş devam ettirilemedi.')
       await saveCompletedSale(paperModal.cartSnapshot, paperModal.payMethod, paperModal.split, paperModal.discountAmount)
       setPaperModal(null)
     } catch (err) {
@@ -613,7 +680,8 @@ export default function QuickSalePage() {
     if (!paperModal) return
     setPaperModal((prev) => prev && ({ ...prev, loading: 'cancel', error: '' }))
     try {
-      await postAgent('/document/cancel', { documentId: paperModal.documentId })
+      if (isS1Device()) await postAgent('/document/cancel', { documentId: paperModal.documentId })
+      else await postBridge('/api/document/cancel', { documentId: paperModal.documentId })
     } catch {
       /* fiş cihazda kalmış olabilir */
     }
@@ -622,13 +690,24 @@ export default function QuickSalePage() {
   }
 
   async function okcCommand(path, busyKey, emptyMessage) {
-    if (!fiscal?.deviceHost) {
+    if (!fiscalReady() && !fiscal?.deviceHost && !fiscal?.comPort) {
       setOkcMsg('Önce yazarkasayı eşleştir.')
       return
     }
     setOkcBusy(busyKey)
     setOkcMsg('')
     try {
+      if (!isS1Device()) {
+        await postBridge('/api/connect', bridgeBody())
+        const bridgePath = path === '/report/z' ? '/api/report/z'
+          : path === '/report/x' ? '/api/report/x'
+            : path === '/document/resume' ? '/api/document/resume'
+              : '/api/document/cancel'
+        const data = await postBridge(bridgePath, {})
+        const ok = !!(data?.success || data?.status === 'ok')
+        setOkcMsg(data?.message || (ok ? 'Tamam.' : emptyMessage))
+        return
+      }
       const data = await postAgent(path, {})
       setOkcMsg(data?.message || (data?.ok ? 'Tamam.' : emptyMessage))
     } catch (err) {
@@ -657,7 +736,7 @@ export default function QuickSalePage() {
     const cartSnapshot = cart.map((item) => ({ ...item }))
     const payable = total
     const discountAmount = canDiscount ? cart.reduce((sum, item) => sum + lineDiscount(item), 0) + cartDiscount : 0
-    const fiscalOn = fiscal?.isEnabled && fiscal?.isPaired && fiscal?.deviceHost && payMethod !== 'Veresiye'
+    const fiscalOn = fiscalReady() && payMethod !== 'Veresiye'
     try {
       if (fiscalOn) {
         const cardWait = payMethod === 'KrediKarti' || (split?.card > 0)
@@ -733,7 +812,7 @@ export default function QuickSalePage() {
   const splitCashValue = moneyInput(splitCash)
   const splitCardValue = Math.max(0, Math.round((total - splitCashValue) * 100) / 100)
 
-  const priceLook = fiscal && !fiscal.isPaired
+  const priceLook = fiscal?.isEnabled && !fiscal?.isPaired
 
   return (
     <div className="h-screen p-3 flex gap-3 overflow-x-auto overflow-y-hidden bg-[#070b16] text-slate-100">
