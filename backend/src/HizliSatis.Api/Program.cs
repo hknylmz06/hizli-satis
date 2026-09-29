@@ -1,4 +1,5 @@
 using System.Text;
+using HizliSatis.Api;
 using HizliSatis.Api.Middleware;
 using HizliSatis.Infrastructure;
 using HizliSatis.Infrastructure.Options;
@@ -17,7 +18,11 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 builder.Services.AddHostedService<HizliSatis.Api.SqlWarmupService>();
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+    options.JsonSerializerOptions.Converters.Add(new UtcNullableDateTimeConverter());
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
