@@ -7,6 +7,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options) : DbCont
 {
     public DbSet<TenantUser> Users => Set<TenantUser>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<PosShortcut> PosShortcuts => Set<PosShortcut>();
     public DbSet<ProductCategory> Categories => Set<ProductCategory>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<SizeOption> SizeOptions => Set<SizeOption>();

@@ -35,3 +35,32 @@ export async function api(path, { method = 'GET', body, token } = {}) {
   if (res.status === 204) return null
   return res.json()
 }
+
+export function readLocalShortcuts() {
+  try { return JSON.parse(localStorage.getItem('pos-shortcuts') || '[]') } catch { return [] }
+}
+
+function numericIds(ids) {
+  return [...new Set((ids || []).map((id) => Number(id)).filter((id) => id > 0))]
+}
+
+export async function fetchShortcuts(token) {
+  const remote = await api('/api/pos/shortcuts', { token })
+  const ids = Array.isArray(remote) ? remote : []
+  if (ids.length) {
+    localStorage.setItem('pos-shortcuts', JSON.stringify(ids))
+    return ids
+  }
+  const local = numericIds(readLocalShortcuts())
+  if (!local.length) return []
+  return storeShortcuts(token, local)
+}
+
+export async function storeShortcuts(token, ids) {
+  const productIds = numericIds(ids)
+  localStorage.setItem('pos-shortcuts', JSON.stringify(productIds))
+  const saved = await api('/api/pos/shortcuts', { method: 'PUT', token, body: { productIds } })
+  const next = Array.isArray(saved) ? saved : productIds
+  localStorage.setItem('pos-shortcuts', JSON.stringify(next))
+  return next
+}

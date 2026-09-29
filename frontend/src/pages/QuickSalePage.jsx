@@ -5,7 +5,7 @@ import {
   Banknote, CreditCard, Sparkles, Star, Wallet, Layers, FileText, RotateCcw,
   AlertCircle, CheckCircle, Users, Scale, Printer, Play, FileX
 } from 'lucide-react'
-import { api } from '../api'
+import { api, fetchShortcuts, readLocalShortcuts, storeShortcuts } from '../api'
 import { useAuth } from '../auth'
 import { allows } from '../permissions'
 
@@ -88,9 +88,7 @@ export default function QuickSalePage() {
   const [splitCash, setSplitCash] = useState('')
   const [deptAmount, setDeptAmount] = useState('')
   const [askCustomer, setAskCustomer] = useState(false)
-  const [shortcuts, setShortcuts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('pos-shortcuts') || '[]') } catch { return [] }
-  })
+  const [shortcuts, setShortcuts] = useState(readLocalShortcuts)
   const [categories, setCategories] = useState([])
   const [categoryTabs, setCategoryTabs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pos-category-tabs') || '[]') } catch { return [] }
@@ -152,6 +150,7 @@ export default function QuickSalePage() {
     }).catch(() => {})
     api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
     api('/api/fiscal/settings', { token: session.token }).then(setFiscal).catch(() => setFiscal(null))
+    fetchShortcuts(session.token).then(setShortcuts).catch(() => {})
     inputRef.current?.focus()
   }, [session.token])
 
@@ -204,7 +203,9 @@ export default function QuickSalePage() {
 
   function rememberShortcuts(next) {
     setShortcuts(next)
-    localStorage.setItem('pos-shortcuts', JSON.stringify(next))
+    storeShortcuts(session.token, next)
+      .then(setShortcuts)
+      .catch(() => setError('Hızlı satış tuşu veritabanına yazılamadı.'))
   }
 
   function pinShortcut(productId) {
