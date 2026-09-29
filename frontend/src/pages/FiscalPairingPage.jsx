@@ -133,7 +133,7 @@ export default function FiscalPairingPage() {
       agentBaseUrl: form.agentBaseUrl,
       bridgeBaseUrl: form.bridgeBaseUrl,
       userId: form.userId ? Number(form.userId) : null,
-      isEnabled: form.isEnabled
+      isEnabled: true
     }
   }
 
@@ -376,21 +376,6 @@ export default function FiscalPairingPage() {
 
           <div className="rounded-2xl bg-violet-100 border border-violet-200 px-4 py-3 text-sm text-violet-900">
             <span className="font-black">Ethernet Canlı Eşleme Rehberi:</span> Hugin cihazınızın ekranından Menü → Eşleme (Pairing) → PC Eşleme seçeneğine giriniz. Cihaz ekranda eşleme beklerken aşağıdaki <strong>Bağlantıyı Test Et / Eşle</strong> düğmesine basın ve cihaz ekranındaki onayı (Giriş tuşu) onaylayınız.
-          </div>
-
-          <div className="flex items-center justify-between gap-4 pt-1">
-            <div>
-              <div className="font-bold text-sm text-slate-800">POS Satışlarında Otomatik Mali Fiş Basımı</div>
-              <p className="text-xs text-amber-600 mt-0.5">Bu ayar açıkken yazarkasa canlı bağlı değilse satış fişi basılmaz. ÖKC olmadan satış yapmak için bu ayarı kapatın.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setField('isEnabled', !form.isEnabled)}
-              className={`toggle shrink-0 ${form.isEnabled ? '!bg-violet-600' : '!bg-slate-300'}`}
-              aria-pressed={form.isEnabled}
-            >
-              <span className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${form.isEnabled ? 'left-7' : 'left-1'}`} />
-            </button>
           </div>
 
           <div className="flex items-center justify-between gap-4 border-t border-sky-100 pt-3">

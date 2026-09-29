@@ -49,17 +49,19 @@ public class FiscalController(TenantDbContextFactory tenantDbFactory) : Controll
     public async Task<IActionResult> GetSettings(CancellationToken ct)
     {
         await using var db = tenantDbFactory.Create();
+        await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
         await TenantSchemaEnsuring.EnsureFiscalTableAsync(db, ct);
+        var autoReceipt = await AutoReceiptAsync(db, ct);
         var mine = await ResolveForUserAsync(db, CurrentUserId(), ct);
-        if (mine is not null) return Ok(MapRegister(mine));
-        var fiscalRequired = await db.FiscalRegisters.AsNoTracking().AnyAsync(x => x.IsEnabled, ct);
+        if (mine is not null) return Ok(MapRegister(mine, autoReceipt));
+        var fiscalRequired = autoReceipt && await db.FiscalRegisters.AsNoTracking().AnyAsync(x => x.IsEnabled, ct);
         return Ok(new
         {
             isEnabled = fiscalRequired,
             isPaired = false,
             deviceHost = "",
             model = "",
-            needsAssignment = true,
+            needsAssignment = fiscalRequired,
             priceOnly = fiscalRequired
         });
     }
@@ -320,7 +322,15 @@ public class FiscalController(TenantDbContextFactory tenantDbFactory) : Controll
     private static string? Clean(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static object MapRegister(FiscalRegister s) => new
+    private static async Task<bool> AutoReceiptAsync(TenantDbContext db, CancellationToken ct)
+    {
+        var value = await db.Settings.AsNoTracking().Select(s => (bool?)s.AutoFiscalReceipt).FirstOrDefaultAsync(ct);
+        return value ?? true;
+    }
+
+    private static object MapRegister(FiscalRegister s) => MapRegister(s, null);
+
+    private static object MapRegister(FiscalRegister s, bool? autoReceipt) => new
     {
         s.Id,
         s.Name,
@@ -336,7 +346,7 @@ public class FiscalController(TenantDbContextFactory tenantDbFactory) : Controll
         s.AgentBaseUrl,
         s.BridgeBaseUrl,
         s.UserId,
-        s.IsEnabled,
+        IsEnabled = autoReceipt ?? s.IsEnabled,
         s.IsPaired,
         s.LastStatus,
         s.LastPairedAt,
