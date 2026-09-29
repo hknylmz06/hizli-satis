@@ -769,7 +769,7 @@ export default function QuickSalePage() {
     if (fiscal?.isEnabled && !fiscal?.isPaired) {
       setError(fiscal.needsAssignment
         ? 'Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
-        : 'Satış yapamazsın. Fiyat gör modundasın.')
+        : 'Hata: Yazarkasa eşleşmedi. Satış yapamazsın.')
       return
     }
     if (payMethod === 'Veresiye' && !canCredit) {
@@ -883,11 +883,11 @@ export default function QuickSalePage() {
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
         {priceLook && (
-          <div className="mb-2 p-2 bg-amber-950 border border-amber-500/60 rounded-2xl text-amber-200 text-[11px] font-bold flex items-center gap-2">
+          <div className={`mb-2 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
             <AlertCircle className="w-4 h-4 shrink-0" />
             {fiscal?.needsAssignment
               ? 'FİYAT GÖR MODU. Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
-              : 'FİYAT GÖR MODU. Satış yapamazsın. Yazarkasa eşleşmedi.'}
+              : 'Hata: Yazarkasa eşleşmedi. Satış yapamazsın.'}
           </div>
         )}
 
