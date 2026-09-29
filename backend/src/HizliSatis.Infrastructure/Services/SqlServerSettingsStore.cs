@@ -189,7 +189,11 @@ public sealed class SqlServerSettingsStore
             InitialCatalog = database,
             TrustServerCertificate = true,
             Encrypt = true,
-            ConnectTimeout = 30
+            Pooling = true,
+            MinPoolSize = 1,
+            MaxPoolSize = 40,
+            ConnectTimeout = 8,
+            Enlist = false
         };
 
         if (string.IsNullOrWhiteSpace(settings.User))

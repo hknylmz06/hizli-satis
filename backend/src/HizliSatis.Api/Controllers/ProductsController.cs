@@ -97,7 +97,27 @@ public class ProductsController(
                     .ToList()
             })
             .FirstOrDefaultAsync(ct);
-        return product is null ? NotFound(new { message = "Ürün bulunamadı." }) : Ok(product);
+        if (product is not null) return Ok(product);
+
+        var code = barcode.Trim();
+        object? catalog = null;
+        if (code.Length >= 3 && !code.StartsWith("DEPT", StringComparison.OrdinalIgnoreCase))
+        {
+            catalog = await master.CatalogProducts.AsNoTracking()
+                .Where(x => x.Barcode == code)
+                .Select(x => new
+                {
+                    x.Barcode,
+                    x.Name,
+                    salePrice = x.SalePrice,
+                    vatRate = x.VatRate,
+                    x.Unit,
+                    categoryName = x.CategoryName
+                })
+                .FirstOrDefaultAsync(ct);
+        }
+
+        return NotFound(new { message = "Ürün bulunamadı.", catalog });
     }
 
     [HttpPost]
