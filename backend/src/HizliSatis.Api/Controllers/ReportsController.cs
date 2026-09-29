@@ -61,9 +61,7 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
     [HttpGet("overview")]
     public async Task<IActionResult> Overview([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
     {
-        var start = (from ?? DateTime.UtcNow.Date.AddDays(-6)).Date;
-        var end = (to ?? DateTime.UtcNow).Date.AddDays(1);
-        if (end <= start) end = start.AddDays(1);
+        var (start, end, startLocal, endLocal) = Range(from, to);
 
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
@@ -72,10 +70,17 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
             .Include(s => s.Items)
             .Where(s => s.SoldAt >= start && s.SoldAt < end)
             .ToListAsync(ct);
-        var products = await db.Products.AsNoTracking()
-            .Include(p => p.Category)
-            .Where(p => p.IsActive)
-            .ToListAsync(ct);
+        var soldIds = sales.SelectMany(s => s.Items).Where(i => i.ProductId is int).Select(i => i.ProductId!.Value).Distinct().ToList();
+        var products = soldIds.Count == 0
+            ? []
+            : await db.Products.AsNoTracking()
+                .Where(p => soldIds.Contains(p.Id))
+                .Select(p => new SoldProduct(p.Id, p.Barcode, p.Unit, p.Category != null ? p.Category.Name : null))
+                .ToListAsync(ct);
+        var activeProducts = db.Products.AsNoTracking().Where(p => p.IsActive);
+        var skuCount = await activeProducts.CountAsync(ct);
+        var lowCount = await activeProducts.CountAsync(p => p.StockQuantity <= p.CriticalStockLevel, ct);
+        var stockValue = skuCount == 0 ? 0 : await activeProducts.SumAsync(p => p.StockQuantity * p.PurchasePrice, ct);
         var accounts = await db.CashAccounts.AsNoTracking().Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync(ct);
         var collected = await db.CustomerPayments.AsNoTracking()
             .Where(p => p.PaidAt >= start && p.PaidAt < end && (p.Kind == null || p.Kind == "payment"))
@@ -84,15 +89,19 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
             .Where(p => p.PaidAt >= start && p.PaidAt < end && p.Kind == "payment")
             .ToListAsync(ct);
 
-        var users = await db.Users.AsNoTracking().ToListAsync(ct);
-        var categoryByProduct = products.ToDictionary(p => p.Id, p => p.Category?.Name ?? "Kategorisiz");
+        var users = await db.Users.AsNoTracking()
+            .Select(u => new { u.Username, u.DisplayName, u.Role })
+            .ToListAsync(ct);
+        var categoryByProduct = products.ToDictionary(p => p.Id, p => p.CategoryName ?? "Kategorisiz");
         var accountNames = accounts.ToDictionary(a => a.Id, a => a.Name);
 
         var days = new List<object>();
-        for (var day = start; day < end; day = day.AddDays(1))
+        for (var day = startLocal; day < endLocal; day = day.AddDays(1))
         {
             var next = day.AddDays(1);
-            var bucket = sales.Where(s => s.SoldAt >= day && s.SoldAt < next).ToList();
+            var fromUtc = day - Turkey;
+            var toUtc = next - Turkey;
+            var bucket = sales.Where(s => s.SoldAt >= fromUtc && s.SoldAt < toUtc).ToList();
             var revenue = bucket.Sum(s => s.GrandTotal);
             var cost = bucket.Sum(s => s.CostTotal);
             days.Add(new { date = day, revenue, cost, profit = revenue - cost, count = bucket.Count });
@@ -117,7 +126,7 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
                     name = first.ProductName,
                     barcode = first.Barcode ?? product?.Barcode,
                     category,
-                    unit = string.IsNullOrWhiteSpace(product?.Unit) ? "Adet" : product!.Unit,
+                    unit = string.IsNullOrWhiteSpace(product?.Unit) ? "Adet" : product.Unit,
                     quantity = qty,
                     revenue,
                     cost,
@@ -157,26 +166,11 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
 
         var revenueTotal = sales.Sum(s => s.GrandTotal);
         var costTotal = sales.Sum(s => s.CostTotal);
-        var stockItems = products
-            .Select(p => new
-            {
-                p.Name,
-                p.Barcode,
-                stock = p.StockQuantity,
-                critical = p.CriticalStockLevel,
-                purchasePrice = p.PurchasePrice,
-                salePrice = p.SalePrice,
-                stockValue = Math.Round(p.StockQuantity * p.PurchasePrice, 2),
-                category = p.Category?.Name ?? "Kategorisiz",
-                low = p.StockQuantity <= p.CriticalStockLevel
-            })
-            .OrderBy(p => p.stock)
-            .ToList();
 
         return Ok(new
         {
-            from = start,
-            to = end.AddDays(-1),
+            from = startLocal,
+            to = endLocal.AddDays(-1),
             saleCount = sales.Count,
             kasa = new
             {
@@ -238,16 +232,76 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
             },
             stok = new
             {
-                skuCount = stockItems.Count,
-                stockValue = stockItems.Sum(p => p.stockValue),
-                lowCount = stockItems.Count(p => p.low),
-                items = stockItems
+                skuCount,
+                stockValue = Math.Round(stockValue, 2),
+                lowCount,
+                items = Array.Empty<object>()
             },
             products = productSales,
             categories = categorySales,
             hours
         });
     }
+
+    [HttpGet("stock")]
+    public async Task<IActionResult> Stock([FromQuery] string? filter, [FromQuery] string? q, [FromQuery] int take = 200, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take, 1, 300);
+        var needle = q?.Trim();
+        await using var db = tenantDbFactory.Create();
+        await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
+        var query = db.Products.AsNoTracking().Where(p => p.IsActive);
+        query = filter switch
+        {
+            "in" => query.Where(p => p.StockQuantity > 0),
+            "out" => query.Where(p => p.StockQuantity <= 0),
+            "critical" => query.Where(p => p.StockQuantity <= p.CriticalStockLevel),
+            _ => query
+        };
+        if (!string.IsNullOrWhiteSpace(needle))
+            query = query.Where(p => p.Name.Contains(needle) || (p.Barcode != null && p.Barcode.Contains(needle)));
+
+        var matchCount = await query.CountAsync(ct);
+        var matchValue = matchCount == 0 ? 0 : await query.SumAsync(p => p.StockQuantity * p.PurchasePrice, ct);
+        var items = await query
+            .OrderBy(p => p.StockQuantity)
+            .ThenBy(p => p.Name)
+            .Take(take)
+            .Select(p => new
+            {
+                p.Name,
+                p.Barcode,
+                stock = p.StockQuantity,
+                critical = p.CriticalStockLevel,
+                purchasePrice = p.PurchasePrice,
+                salePrice = p.SalePrice,
+                stockValue = Math.Round(p.StockQuantity * p.PurchasePrice, 2),
+                category = p.Category != null ? p.Category.Name : "Kategorisiz",
+                low = p.StockQuantity <= p.CriticalStockLevel
+            })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            matchCount,
+            matchValue = Math.Round(matchValue, 2),
+            shown = items.Count,
+            items
+        });
+    }
+
+    private static readonly TimeSpan Turkey = TimeSpan.FromHours(3);
+
+    private static (DateTime StartUtc, DateTime EndUtc, DateTime StartLocal, DateTime EndLocal) Range(DateTime? from, DateTime? to)
+    {
+        var today = DateTime.UtcNow.Add(Turkey).Date;
+        var startLocal = (from ?? today.AddDays(-6)).Date;
+        var endLocal = (to ?? today).Date.AddDays(1);
+        if (endLocal <= startLocal) endLocal = startLocal.AddDays(1);
+        return (startLocal - Turkey, endLocal - Turkey, startLocal, endLocal);
+    }
+
+    private sealed record SoldProduct(int Id, string? Barcode, string? Unit, string? CategoryName);
 
     private static string MethodName(HizliSatis.Domain.Enums.PaymentMethod method) => method switch
     {
