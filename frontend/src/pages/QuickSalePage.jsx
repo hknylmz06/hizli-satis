@@ -432,12 +432,7 @@ export default function QuickSalePage() {
       setBarcode('')
     } catch (err) {
       if ((err.message || '').toLowerCase().includes('bulunamadı')) {
-        let catalog = null
-        try {
-          catalog = await api(`/api/catalog/barcode/${encodeURIComponent(code)}`, { token: session.token })
-        } catch {
-          catalog = null
-        }
+        const catalog = err.data?.catalog || null
         setMissingBarcode({ barcode: code, name: catalog?.name || '' })
         setBarcode('')
         return
@@ -451,7 +446,7 @@ export default function QuickSalePage() {
   useEffect(() => {
     const code = barcode.trim()
     if (code.length < 8) return
-    const timer = setTimeout(() => { addByBarcode(null, code) }, 450)
+    const timer = setTimeout(() => { addByBarcode(null, code) }, 180)
     return () => clearTimeout(timer)
   }, [barcode])
 

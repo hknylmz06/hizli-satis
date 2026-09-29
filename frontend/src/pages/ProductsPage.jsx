@@ -179,8 +179,26 @@ export default function ProductsPage() {
       }))
       setLookup('Bu barkod zaten bu firmanın stoğunda var.')
       return
-    } catch {
-      /* stokta yok, ana kataloğa bak */
+    } catch (err) {
+      if (err.data && Object.prototype.hasOwnProperty.call(err.data, 'catalog')) {
+        const found = err.data.catalog
+        if (!found) {
+          if (stillSame()) setLookup('Kayıtlarda bu barkod yok. Yeni kart olarak kaydedebilirsin.')
+          return
+        }
+        if (!stillSame()) return
+        const category = categories.find((c) => c.name && found.categoryName && c.name.toLowerCase() === String(found.categoryName).toLowerCase())
+        setForm((prev) => ({
+          ...prev,
+          name: found.name || prev.name,
+          salePrice: Number(found.salePrice) > 0 ? found.salePrice : prev.salePrice,
+          vatRate: found.vatRate ?? prev.vatRate,
+          unit: found.unit || prev.unit,
+          categoryId: category ? String(category.id) : prev.categoryId
+        }))
+        setLookup(`${found.name} isimli ürün stokta yok. Kart bilgileri doldu.`)
+        return
+      }
     }
     try {
       const found = await api(`/api/catalog/barcode/${encodeURIComponent(code)}`, { token: session.token })
@@ -204,7 +222,7 @@ export default function ProductsPage() {
     if (!showModal || editingId) return
     const code = form.barcode.trim()
     if (code.length < 3) return
-    const timer = setTimeout(() => { lookupBarcode(code) }, 400)
+    const timer = setTimeout(() => { lookupBarcode(code) }, 200)
     return () => clearTimeout(timer)
   }, [form.barcode, showModal, editingId, categories])
 

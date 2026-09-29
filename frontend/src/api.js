@@ -23,8 +23,11 @@ export async function api(path, { method = 'GET', body, token } = {}) {
       const data = await res.json()
       const fieldError = data.errors ? Object.values(data.errors).flat().find(Boolean) : null
       message = data.message || fieldError || data.title || message
-    } catch {
-      /* ignore */
+      const err = new Error(message)
+      err.data = data
+      throw err
+    } catch (err) {
+      if (err.data) throw err
     }
     throw new Error(message)
   }

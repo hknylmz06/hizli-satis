@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using HizliSatis.Domain.Tenant;
 using HizliSatis.Infrastructure.Persistence;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace HizliSatis.Infrastructure.Services;
@@ -7,11 +9,31 @@ namespace HizliSatis.Infrastructure.Services;
 public static class TenantSchemaEnsuring
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly ConcurrentDictionary<string, byte> Done = new(StringComparer.OrdinalIgnoreCase);
+
+    private static string Key(TenantDbContext db, string kind)
+    {
+        var cs = db.Database.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) return "";
+        var name = new SqlConnectionStringBuilder(cs).InitialCatalog;
+        return string.IsNullOrWhiteSpace(name) ? "" : kind + ":" + name;
+    }
+
+    private static bool Already(string key) => key.Length > 0 && Done.ContainsKey(key);
+
+    private static void Mark(string key)
+    {
+        if (key.Length > 0) Done[key] = 1;
+    }
+
     public static async Task EnsureFiscalTableAsync(TenantDbContext db, CancellationToken ct = default)
     {
+        var key = Key(db, "fiscal");
+        if (Already(key)) return;
         await Gate.WaitAsync(ct);
         try
         {
+        if (Already(key)) return;
         await db.Database.ExecuteSqlRawAsync(
             """
             IF OBJECT_ID(N'FiscalDevices', N'U') IS NULL
@@ -35,6 +57,7 @@ public static class TenantSchemaEnsuring
             END
             """,
             ct);
+        Mark(key);
         }
         finally
         {
@@ -44,9 +67,12 @@ public static class TenantSchemaEnsuring
 
     public static async Task EnsureCategoriesAsync(TenantDbContext db, CancellationToken ct = default)
     {
+        var key = Key(db, "cat");
+        if (Already(key)) return;
         await Gate.WaitAsync(ct);
         try
         {
+        if (Already(key)) return;
         await db.Database.ExecuteSqlRawAsync(
             """
             IF OBJECT_ID(N'Categories', N'U') IS NULL
@@ -64,6 +90,7 @@ public static class TenantSchemaEnsuring
                 ALTER TABLE [Products] ADD [CategoryId] int NULL;
             """,
             ct);
+        Mark(key);
         }
         finally
         {
@@ -73,9 +100,12 @@ public static class TenantSchemaEnsuring
 
     public static async Task EnsureDefinitionsAsync(TenantDbContext db, CancellationToken ct = default)
     {
+        var key = Key(db, "def");
+        if (Already(key)) return;
         await Gate.WaitAsync(ct);
         try
         {
+        if (Already(key)) return;
         await IntIdMigration.ApplyAsync(db, ct);
         await db.Database.ExecuteSqlRawAsync(
             """
@@ -304,6 +334,9 @@ public static class TenantSchemaEnsuring
                 ALTER TABLE [Sales] ADD [CardAmount] decimal(18,2) NOT NULL CONSTRAINT [DF_Sales_CardAmount] DEFAULT 0;
             IF COL_LENGTH(N'Sales', N'AccountsPosted') IS NULL
                 ALTER TABLE [Sales] ADD [AccountsPosted] bit NOT NULL CONSTRAINT [DF_Sales_AccountsPosted] DEFAULT 0;
+            IF OBJECT_ID(N'Products', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_Barcode' AND object_id = OBJECT_ID(N'Products'))
+                CREATE INDEX [IX_Products_Barcode] ON [Products]([Barcode]);
             """,
             ct);
 
@@ -337,6 +370,8 @@ public static class TenantSchemaEnsuring
                     new ExpenseCategory { Name = "Diğer gelir", Type = "income", Color = "#10b981" });
                 await db.SaveChangesAsync(ct);
             }
+
+            Mark(key);
         }
         finally
         {
