@@ -4,6 +4,7 @@ import { ShoppingCart, Lock, User, AlertCircle, ArrowRight, Building2 } from 'lu
 import { api } from '../api'
 import { useAuth } from '../auth'
 import DatabaseServerPanel from './DatabaseServerPanel'
+import { ThemeToggle } from '../theme'
 
 export default function LoginPage() {
   const { login, session } = useAuth()
@@ -57,6 +58,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-auto">
+      <ThemeToggle labeled className="absolute top-4 right-4 z-20 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-900 border border-slate-700 text-slate-100" />
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 

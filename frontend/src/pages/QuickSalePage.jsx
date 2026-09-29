@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { api, fetchShortcuts, readLocalShortcuts, storeShortcuts } from '../api'
 import { useAuth } from '../auth'
+import { ThemeToggle } from '../theme'
 import { allows } from '../permissions'
 
 const emptySlots = () => [{ items: [] }, { items: [] }, { items: [] }]
@@ -837,6 +838,7 @@ export default function QuickSalePage() {
             <RotateCcw className="w-3.5 h-3.5" /> İade Al
           </button>
           <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
+          <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
 
         <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-2">
