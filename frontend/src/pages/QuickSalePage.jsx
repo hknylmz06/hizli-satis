@@ -102,7 +102,7 @@ export default function QuickSalePage() {
   const [categoryPicker, setCategoryPicker] = useState(false)
   const [shortcutOpen, setShortcutOpen] = useState(false)
   const [variantAsk, setVariantAsk] = useState(null)
-  const [missingBarcode, setMissingBarcode] = useState('')
+  const [missingBarcode, setMissingBarcode] = useState(null)
   const [weightAsk, setWeightAsk] = useState(null)
   const [shortcutMode, setShortcutMode] = useState('select')
   const [shortcutSearch, setShortcutSearch] = useState('')
@@ -428,7 +428,14 @@ export default function QuickSalePage() {
       setBarcode('')
     } catch (err) {
       if ((err.message || '').toLowerCase().includes('bulunamadı')) {
-        setMissingBarcode(barcode.trim())
+        const code = barcode.trim()
+        let catalog = null
+        try {
+          catalog = await api(`/api/catalog/barcode/${encodeURIComponent(code)}`, { token: session.token })
+        } catch {
+          catalog = null
+        }
+        setMissingBarcode({ barcode: code, name: catalog?.name || '' })
         setBarcode('')
         return
       }
@@ -1130,11 +1137,11 @@ export default function QuickSalePage() {
       {missingBarcode && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-3">
-            <div className="font-black text-lg text-white">Kayıt yok</div>
-            <p className="text-sm text-slate-300">Barkod <span className="font-mono text-amber-300">{missingBarcode}</span> stokta yok. Kart açmak ister misin?</p>
+            <div className="font-black text-lg text-white">{missingBarcode.name ? 'Katalogda var' : 'Kayıt yok'}</div>
+            <p className="text-sm text-slate-300">Barkod <span className="font-mono text-amber-300">{missingBarcode.barcode}</span> bu firmanın stoğunda yok.{missingBarcode.name ? ` Ana katalogdaki adı: ${missingBarcode.name}` : ' Kart açmak ister misin?'}</p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setMissingBarcode('')} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300">Vazgeç</button>
-              <button type="button" onClick={() => navigate(`/app/products?barkod=${encodeURIComponent(missingBarcode)}`)} className="flex-1 py-2.5 rounded-xl bg-emerald-600 font-black">Stok kartı aç</button>
+              <button type="button" onClick={() => setMissingBarcode(null)} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300">Vazgeç</button>
+              <button type="button" onClick={() => navigate(`/app/products?barkod=${encodeURIComponent(missingBarcode.barcode)}`)} className="flex-1 py-2.5 rounded-xl bg-emerald-600 font-black">Stok kartı aç</button>
             </div>
           </div>
         </div>
