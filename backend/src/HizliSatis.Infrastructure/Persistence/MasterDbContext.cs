@@ -8,6 +8,7 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<PlatformAdmin> PlatformAdmins => Set<PlatformAdmin>();
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
+    public DbSet<CatalogProduct> CatalogProducts => Set<CatalogProduct>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +32,18 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
             e.Property(x => x.Channel).HasMaxLength(32);
             e.Property(x => x.Recipient).HasMaxLength(200);
             e.Property(x => x.Subject).HasMaxLength(300);
+        });
+
+        modelBuilder.Entity<CatalogProduct>(e =>
+        {
+            e.HasIndex(x => x.Barcode).IsUnique();
+            e.Property(x => x.Barcode).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.CategoryName).HasMaxLength(120);
+            e.Property(x => x.Unit).HasMaxLength(32);
+            e.Property(x => x.OriginCountry).HasMaxLength(8);
+            e.Property(x => x.VatRate).HasPrecision(5, 2);
+            e.Property(x => x.SalePrice).HasPrecision(18, 2);
         });
     }
 }

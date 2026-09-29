@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Cpu, Barcode, Search, ShoppingCart, Package, Trash2, X, Minus, Plus,
   Banknote, CreditCard, Sparkles, Star, Wallet, Layers, FileText, RotateCcw,
-  AlertCircle, CheckCircle, Users, Scale
+  AlertCircle, CheckCircle, Users, Scale, Printer, Play, FileX
 } from 'lucide-react'
 import { api } from '../api'
 import { useAuth } from '../auth'
@@ -74,6 +74,9 @@ export default function QuickSalePage() {
   const [fiscal, setFiscal] = useState(null)
   const [fiscalWait, setFiscalWait] = useState('')
   const [paperModal, setPaperModal] = useState(null)
+  const [okcOpen, setOkcOpen] = useState(false)
+  const [okcBusy, setOkcBusy] = useState('')
+  const [okcMsg, setOkcMsg] = useState('')
   const [middleTab, setMiddleTab] = useState('quick')
   const [images, setImages] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pos-images') || '{}') } catch { return {} }
@@ -603,6 +606,23 @@ export default function QuickSalePage() {
     setError('Fiş iptal edildi. Ödeme alınamadı, sepet duruyor.')
   }
 
+  async function okcCommand(path, busyKey, emptyMessage) {
+    if (!fiscal?.deviceHost) {
+      setOkcMsg('Önce yazarkasayı eşleştir.')
+      return
+    }
+    setOkcBusy(busyKey)
+    setOkcMsg('')
+    try {
+      const data = await postAgent(path, {})
+      setOkcMsg(data?.message || (data?.ok ? 'Tamam.' : emptyMessage))
+    } catch (err) {
+      setOkcMsg(err.message || emptyMessage)
+    } finally {
+      setOkcBusy('')
+    }
+  }
+
   async function checkout(method, split) {
     const payMethod = method || paymentMethod
     setPaymentMethod(payMethod)
@@ -708,10 +728,10 @@ export default function QuickSalePage() {
             <button type="button" onClick={() => navigate('/app')} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl text-xs font-bold">
               <LayoutDashboard className="w-4 h-4 text-blue-400" /> Menü
             </button>
-            <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl text-xs font-bold border ${fiscal?.isPaired ? 'bg-emerald-950 text-emerald-300 border-emerald-500/70' : 'bg-rose-950 text-rose-300 border-rose-500/70'}`}>
+            <button type="button" onClick={() => { setOkcOpen(true); setOkcMsg('') }} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl text-xs font-bold border ${fiscal?.isPaired ? 'bg-emerald-950 text-emerald-300 border-emerald-500/70' : 'bg-rose-950 text-rose-300 border-rose-500/70'}`}>
               <Cpu className="w-4 h-4" /> ÖKC
               <span className={`w-2 h-2 rounded-full ${fiscal?.isPaired ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-            </span>
+            </button>
             <button type="button" onClick={() => setError('İade alma sıradaki adım.')} className="flex items-center gap-1 px-2.5 py-1.5 rounded-2xl text-xs font-bold border bg-amber-950/80 text-amber-300 border-amber-500/50">
               <RotateCcw className="w-3.5 h-3.5" /> İade Al
             </button>
@@ -1210,6 +1230,43 @@ export default function QuickSalePage() {
           </div>
         )
       })()}
+
+      {okcOpen && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+          <div className="w-[520px] bg-slate-900 border border-slate-700 rounded-3xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-black text-lg">ÖKC Yazarkasa</div>
+                <div className="text-xs text-slate-400">X raporu, Z raporu ve fiş müdahalesi</div>
+              </div>
+              <button type="button" onClick={() => setOkcOpen(false)} className="p-2 text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            {okcMsg && <p className="text-sm text-amber-200 bg-slate-950 border border-slate-700 rounded-xl p-3">{okcMsg}</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" disabled={!!okcBusy} onClick={() => okcCommand('/report/z', 'z', 'Z raporu alınamadı.')} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 text-left disabled:opacity-50">
+                <Printer className="w-5 h-5 text-emerald-400" />
+                <div className="font-bold text-sm mt-2">{okcBusy === 'z' ? 'Gönderiliyor...' : 'Z-Raporu Al'}</div>
+                <div className="text-[11px] text-slate-400">Günü kapatır ve yazar</div>
+              </button>
+              <button type="button" disabled={!!okcBusy} onClick={() => okcCommand('/report/x', 'x', 'X raporu alınamadı.')} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 text-left disabled:opacity-50">
+                <Printer className="w-5 h-5 text-blue-400" />
+                <div className="font-bold text-sm mt-2">{okcBusy === 'x' ? 'Gönderiliyor...' : 'X-Raporu Al'}</div>
+                <div className="text-[11px] text-slate-400">Günü kapatmadan bilgi verir</div>
+              </button>
+              <button type="button" disabled={!!okcBusy} onClick={() => okcCommand('/document/resume', 'resume', 'Fiş devam ettirilemedi.')} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 text-left disabled:opacity-50">
+                <Play className="w-5 h-5 text-amber-400" />
+                <div className="font-bold text-sm mt-2">{okcBusy === 'resume' ? 'Gönderiliyor...' : 'Fiş Devam Et'}</div>
+                <div className="text-[11px] text-slate-400">Kağıt takılınca basımı sürdürür</div>
+              </button>
+              <button type="button" disabled={!!okcBusy} onClick={() => okcCommand('/document/cancel', 'cancel', 'Fiş iptal edilemedi.')} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 text-left disabled:opacity-50">
+                <FileX className="w-5 h-5 text-rose-400" />
+                <div className="font-bold text-sm mt-2">{okcBusy === 'cancel' ? 'Gönderiliyor...' : 'Fiş İptal Et'}</div>
+                <div className="text-[11px] text-slate-400">Askıdaki açık fişi temizler</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {fiscalWait && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">

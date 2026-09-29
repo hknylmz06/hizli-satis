@@ -356,6 +356,12 @@ app.MapPost("/document/cancel", async (DeviceActionRequest request, IHttpClientF
     });
 });
 
+app.MapPost("/report/x", (DeviceActionRequest request, IHttpClientFactory httpClientFactory) =>
+    PrintReportAsync(request, httpClientFactory, "X"));
+
+app.MapPost("/report/z", (DeviceActionRequest request, IHttpClientFactory httpClientFactory) =>
+    PrintReportAsync(request, httpClientFactory, "Z"));
+
 app.Run();
 
 static async Task<StartResult> StartDocumentAsync(
@@ -474,6 +480,51 @@ static string MapPayment(string? method) => method?.Trim().ToLowerInvariant() sw
     "veresiye" or "open_account" or "cari" => "OPEN_ACCOUNT",
     _ => "CASH"
 };
+
+static async Task<IResult> PrintReportAsync(DeviceActionRequest request, IHttpClientFactory httpClientFactory, string kind)
+{
+    if (string.IsNullOrWhiteSpace(request.DeviceHost))
+        return Results.Ok(new { ok = false, message = "Yazarkasa adresi yok. Önce eşleştir." });
+
+    var identity = NormalizeIdentity(request);
+    var (client, baseUrl) = CreateClient(httpClientFactory, request.DeviceHost, request.DevicePort);
+    client.Timeout = TimeSpan.FromSeconds(40);
+
+    var endpoints = kind == "Z"
+        ? new[] { "/v1/reports/Z/print", "/v1/reports/z/print", "/v1/reports/Z", "/v1/reports/z" }
+        : new[] { "/v1/reports/X/print", "/v1/reports/x/print", "/v1/reports/X", "/v1/reports/x" };
+    var methods = kind == "Z"
+        ? new[] { HttpMethod.Post, HttpMethod.Get }
+        : new[] { HttpMethod.Get, HttpMethod.Post };
+
+    string last = "Yazarkasa rapor komutunu kabul etmedi.";
+    foreach (var method in methods)
+    {
+        foreach (var endpoint in endpoints)
+        {
+            try
+            {
+                using var req = CreateRequest(method, baseUrl + endpoint, identity.SoftwareId, identity.SerialNo, identity.HardwareId);
+                if (method == HttpMethod.Post)
+                    req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                using var res = await client.SendAsync(req);
+                var body = await res.Content.ReadAsStringAsync();
+                if (res.IsSuccessStatusCode || IsSuccessStatus(body))
+                {
+                    var label = kind == "Z" ? "Z raporu alındı." : "X raporu alındı.";
+                    return Results.Ok(new { ok = true, message = label });
+                }
+                last = ExtractErrorMessage(body) ?? $"Rapor alınamadı: {(int)res.StatusCode}";
+            }
+            catch (Exception ex)
+            {
+                last = ex.Message;
+            }
+        }
+    }
+
+    return Results.Ok(new { ok = false, message = last });
+}
 
 static bool IsPaperProblem(int status, string body) =>
     status == 206 ||

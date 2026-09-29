@@ -14,6 +14,7 @@ public class MasterSeedService(
         await db.Database.EnsureCreatedAsync(ct);
         await IntIdMigration.ApplyAsync(db, ct);
         await EnsureLicenseColumnAsync(ct);
+        await EnsureCatalogTableAsync(ct);
 
         if (!await db.PlatformAdmins.AnyAsync(ct))
         {
@@ -37,6 +38,30 @@ public class MasterSeedService(
                 ALTER TABLE Tenants ADD LicenseExpiresAt datetime2 NULL;
                 EXEC(N'UPDATE Tenants SET LicenseExpiresAt = DATEADD(year, 1, CreatedAt)');
                 EXEC(N'ALTER TABLE Tenants ALTER COLUMN LicenseExpiresAt datetime2 NOT NULL');
+            END
+            """,
+            ct);
+    }
+
+    private async Task EnsureCatalogTableAsync(CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'CatalogProducts', N'U') IS NULL
+            BEGIN
+                CREATE TABLE CatalogProducts (
+                    Id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_CatalogProducts PRIMARY KEY,
+                    Barcode nvarchar(64) NOT NULL,
+                    Name nvarchar(200) NOT NULL,
+                    CategoryName nvarchar(120) NULL,
+                    Unit nvarchar(32) NOT NULL CONSTRAINT DF_CatalogProducts_Unit DEFAULT N'Adet',
+                    VatRate decimal(5,2) NOT NULL CONSTRAINT DF_CatalogProducts_Vat DEFAULT 20,
+                    SalePrice decimal(18,2) NOT NULL CONSTRAINT DF_CatalogProducts_Price DEFAULT 0,
+                    IsDomestic bit NOT NULL CONSTRAINT DF_CatalogProducts_Domestic DEFAULT 1,
+                    OriginCountry nvarchar(8) NOT NULL CONSTRAINT DF_CatalogProducts_Origin DEFAULT N'TR',
+                    UpdatedAt datetime2 NOT NULL CONSTRAINT DF_CatalogProducts_Updated DEFAULT SYSUTCDATETIME()
+                );
+                CREATE UNIQUE INDEX IX_CatalogProducts_Barcode ON CatalogProducts(Barcode);
             END
             """,
             ct);
