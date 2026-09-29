@@ -43,7 +43,7 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const [time, setTime] = useState(new Date().toLocaleTimeString('tr-TR'))
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date().toLocaleTimeString('tr-TR')), 1000)
@@ -75,9 +75,9 @@ export default function Sidebar() {
         </button>
       </div>
       {mobileOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />}
-      <aside className={`fixed lg:static top-0 left-0 bottom-0 z-50 ${collapsed ? 'w-20' : 'w-64'} bg-slate-950 border-r border-slate-800 text-slate-200 flex flex-col transition-all ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
+      <aside className={`fixed lg:static top-0 left-0 bottom-0 z-50 ${collapsed ? 'w-[4.75rem]' : 'w-64'} bg-slate-950 border-r border-slate-800 text-slate-200 flex flex-col transition-all ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className={`border-b border-slate-800 flex items-center ${collapsed ? 'flex-col gap-2 px-2 py-3' : 'justify-between gap-2 p-4'}`}>
+          <div className={`flex items-center min-w-0 ${collapsed ? 'justify-center' : 'gap-3'}`}>
             <div className="w-10 h-10 shrink-0 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-600 to-violet-700 flex items-center justify-center ring-2 ring-indigo-400/30">
               <ShoppingCart className="w-5 h-5 text-white" />
             </div>
@@ -88,7 +88,7 @@ export default function Sidebar() {
               </div>
             )}
           </div>
-          <button type="button" onClick={() => setCollapsed((v) => !v)} className="hidden lg:flex p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400">
+          <button type="button" onClick={() => setCollapsed((v) => !v)} title={collapsed ? 'Menüyü aç' : 'Menüyü kapat'} className="hidden lg:flex p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400">
             {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
@@ -110,14 +110,16 @@ export default function Sidebar() {
                       onClick={() => setMobileOpen(false)}
                       title={item.label}
                       className={({ isActive }) =>
-                        `flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                        `flex items-center rounded-xl text-sm font-semibold transition ${
+                          collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2'
+                        } ${
                           isActive
                             ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow'
                             : 'text-slate-300 hover:bg-slate-900 hover:text-white'
                         }`
                       }
                     >
-                      <Icon className="w-4 h-4 shrink-0" />
+                      <Icon className={`${collapsed ? 'w-5 h-5' : 'w-4 h-4'} shrink-0`} />
                       {!collapsed && (
                         <>
                           <span className="truncate flex-1">{item.label}</span>
@@ -148,7 +150,7 @@ export default function Sidebar() {
             onClick={() => { logout(); navigate('/') }}
             className="w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className={`${collapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
             {!collapsed && <span>Çıkış</span>}
           </button>
         </div>
