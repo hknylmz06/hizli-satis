@@ -7,6 +7,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options) : DbCont
 {
     public DbSet<TenantUser> Users => Set<TenantUser>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<PosShortcut> PosShortcuts => Set<PosShortcut>();
     public DbSet<ProductCategory> Categories => Set<ProductCategory>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<SizeOption> SizeOptions => Set<SizeOption>();
@@ -28,6 +29,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options) : DbCont
     public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<FiscalDeviceSetting> FiscalDevices => Set<FiscalDeviceSetting>();
+    public DbSet<FiscalRegister> FiscalRegisters => Set<FiscalRegister>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -228,6 +230,21 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options) : DbCont
             e.Property(x => x.SoftwareId).HasMaxLength(100);
             e.Property(x => x.HardwareId).HasMaxLength(100);
             e.Property(x => x.AgentBaseUrl).HasMaxLength(300);
+            e.Property(x => x.LastStatus).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<FiscalRegister>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(80);
+            e.Property(x => x.Model).HasMaxLength(40);
+            e.Property(x => x.ConnectionType).HasMaxLength(8);
+            e.Property(x => x.DeviceHost).HasMaxLength(200);
+            e.Property(x => x.ComPort).HasMaxLength(16);
+            e.Property(x => x.SerialNo).HasMaxLength(100);
+            e.Property(x => x.SoftwareId).HasMaxLength(100);
+            e.Property(x => x.HardwareId).HasMaxLength(100);
+            e.Property(x => x.AgentBaseUrl).HasMaxLength(300);
+            e.Property(x => x.BridgeBaseUrl).HasMaxLength(300);
             e.Property(x => x.LastStatus).HasMaxLength(500);
         });
     }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Cpu, Layers, Package, Palette, Pencil, Percent, Plus, Shirt, Star, Tag, Trash2, UserCog, X } from 'lucide-react'
-import { api } from '../api'
+import { api, fetchShortcuts, readLocalShortcuts, storeShortcuts } from '../api'
 import { useAuth } from '../auth'
 import { allows } from '../permissions'
 
@@ -129,6 +129,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     load().catch((e) => setError(e.message))
+    fetchShortcuts(session.token).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -234,16 +235,16 @@ export default function ProductsPage() {
   }
 
   function shortcutIds() {
-    try { return JSON.parse(localStorage.getItem('pos-shortcuts') || '[]') } catch { return [] }
+    return readLocalShortcuts()
   }
 
   function sameId(a, b) {
     return String(a).toLowerCase() === String(b).toLowerCase()
   }
 
-  function setShortcut(productId, pinned) {
+  async function setShortcut(productId, pinned) {
     const current = shortcutIds().filter((id) => !sameId(id, productId))
-    localStorage.setItem('pos-shortcuts', JSON.stringify(pinned ? [...current, productId] : current))
+    await storeShortcuts(session.token, pinned ? [...current, productId] : current)
   }
 
   function openNew() {
@@ -346,7 +347,7 @@ export default function ProductsPage() {
         }
       })
       const productId = saved?.id || editingId
-      if (productId) setShortcut(productId, form.pinShortcut)
+      if (productId) await setShortcut(productId, form.pinShortcut)
       setShowModal(false)
       setEditingId(null)
       setForm(emptyProduct)
