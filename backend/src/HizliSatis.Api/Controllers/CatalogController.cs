@@ -30,6 +30,7 @@ public class CatalogController(MasterDbContext master) : ControllerBase
             vatRate = row.VatRate,
             row.Unit,
             categoryName = row.CategoryName,
+            row.Image,
             fromCatalog = true
         });
     }
