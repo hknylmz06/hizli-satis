@@ -172,7 +172,14 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             sale.CardAmount = sale.GrandTotal;
         }
 
-        var (cashAccount, posAccount) = await RegistersAsync(db, ct);
+        var (cashAccount, mainPos) = await RegistersAsync(db, ct);
+        CashAccount? posAccount = mainPos;
+        if (sale.CardAmount > 0 && request.PosAccountId is int chosenId)
+        {
+            posAccount = await db.CashAccounts.FirstOrDefaultAsync(a => a.Id == chosenId && a.IsActive && a.Type == "pos", ct);
+            if (posAccount is null)
+                return BadRequest(new { message = "Seçilen POS hesabı bulunamadı." });
+        }
         if (sale.CashAmount > 0 && cashAccount is null)
             return BadRequest(new { message = "Nakit kasa yok. Kasa ve bankadan bir nakit hesabı aç." });
         if (sale.CardAmount > 0 && posAccount is null)
@@ -180,7 +187,10 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
         if (cashAccount is not null)
             cashAccount.Balance += sale.CashAmount;
         if (posAccount is not null)
+        {
             posAccount.Balance += sale.CardAmount;
+            sale.PosAccountId = posAccount.Id;
+        }
         sale.AccountsPosted = sale.CashAmount > 0 || sale.CardAmount > 0;
 
         db.Sales.Add(sale);
@@ -246,9 +256,12 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
 
         if (sale.AccountsPosted)
         {
-            var (cashAccount, posAccount) = await RegistersAsync(db, ct);
+            var (cashAccount, mainPos) = await RegistersAsync(db, ct);
             if (cashAccount is not null)
                 cashAccount.Balance -= sale.CashAmount;
+            CashAccount? posAccount = mainPos;
+            if (sale.PosAccountId is int posId)
+                posAccount = await db.CashAccounts.FirstOrDefaultAsync(a => a.Id == posId, ct) ?? mainPos;
             if (posAccount is not null)
                 posAccount.Balance -= sale.CardAmount;
         }

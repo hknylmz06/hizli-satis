@@ -134,7 +134,9 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
         var accounts = await db.CashAccounts.AsNoTracking().Where(a => a.IsActive).ToListAsync(ct);
         var names = accounts.ToDictionary(a => a.Id, a => a.Name);
         var cash = accounts.FirstOrDefault(a => a.Type == "cash") ?? accounts.FirstOrDefault();
-        var card = accounts.FirstOrDefault(a => a.Type == "pos") ?? accounts.FirstOrDefault(a => a.Type == "bank") ?? cash;
+        var card = accounts.Where(a => a.Type == "pos").OrderBy(a => a.Id).FirstOrDefault()
+            ?? accounts.FirstOrDefault(a => a.Type == "bank")
+            ?? cash;
         var categories = await db.ExpenseCategories.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name, ct);
         var rows = new List<LedgerRow>();
 
@@ -145,8 +147,14 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
         {
             if (sale.CashAmount > 0 && cash is not null)
                 rows.Add(new LedgerRow(sale.SoldAt, "sale", "Satış Tahsilatı", cash.Id, cash.Name, $"POS Satış (Nakit - {cash.Name}): {sale.ReceiptNo}", sale.CashAmount, 0, sale.CashAmount));
-            if (sale.CardAmount > 0 && card is not null)
-                rows.Add(new LedgerRow(sale.SoldAt, "sale", "Satış Tahsilatı", card.Id, card.Name, $"POS Satış (Kredi Kartı - {card.Name}): {sale.ReceiptNo}", sale.CardAmount, 0, sale.CardAmount));
+            if (sale.CardAmount > 0)
+            {
+                var posted = sale.PosAccountId is int posId
+                    ? accounts.FirstOrDefault(a => a.Id == posId) ?? card
+                    : card;
+                if (posted is not null)
+                    rows.Add(new LedgerRow(sale.SoldAt, "sale", "Satış Tahsilatı", posted.Id, posted.Name, $"POS Satış (Kredi Kartı - {posted.Name}): {sale.ReceiptNo}", sale.CardAmount, 0, sale.CardAmount));
+            }
         }
 
         var ledger = await db.LedgerEntries.AsNoTracking().Where(e => e.CreatedAt >= start && e.CreatedAt < end).ToListAsync(ct);

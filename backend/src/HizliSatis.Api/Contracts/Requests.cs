@@ -72,7 +72,8 @@ public record CreateSaleRequest(
     int? CustomerId,
     decimal? DiscountAmount = null,
     decimal? CashAmount = null,
-    decimal? CardAmount = null);
+    decimal? CardAmount = null,
+    int? PosAccountId = null);
 
 public record PurchaseLineRequest(int ProductId, int? VariantId, decimal Quantity, decimal UnitCost);
 

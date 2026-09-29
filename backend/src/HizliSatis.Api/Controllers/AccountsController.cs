@@ -120,17 +120,18 @@ public class AccountsController(TenantDbContextFactory tenantDbFactory) : Contro
         if (account is null) return NotFound();
         var accounts = await db.CashAccounts.AsNoTracking().Where(a => a.IsActive).ToListAsync(ct);
         var cash = accounts.FirstOrDefault(a => a.Type == "cash") ?? accounts.FirstOrDefault();
-        var card = accounts.FirstOrDefault(a => a.Type == "pos") ?? accounts.FirstOrDefault(a => a.Type == "bank") ?? cash;
+        var mainPos = accounts.Where(a => a.Type == "pos").OrderBy(a => a.Id).FirstOrDefault();
         var rows = new List<Move>();
 
-        if (cash?.Id == id || card?.Id == id)
+        if (cash?.Id == id || account.Type == "pos")
         {
             var sales = await db.Sales.AsNoTracking().Where(s => s.PaymentMethod != PaymentMethod.Veresiye).OrderByDescending(s => s.SoldAt).Take(200).ToListAsync(ct);
             foreach (var sale in sales)
             {
                 if (cash?.Id == id && sale.CashAmount > 0)
                     rows.Add(new Move(sale.SoldAt, "Satış nakit", sale.ReceiptNo, sale.CashAmount, "in"));
-                if (card?.Id == id && sale.CardAmount > 0)
+                var postedToThis = sale.PosAccountId == id || (sale.PosAccountId is null && mainPos?.Id == id);
+                if (account.Type == "pos" && postedToThis && sale.CardAmount > 0)
                     rows.Add(new Move(sale.SoldAt, "Satış POS", sale.ReceiptNo, sale.CardAmount, "in"));
             }
         }

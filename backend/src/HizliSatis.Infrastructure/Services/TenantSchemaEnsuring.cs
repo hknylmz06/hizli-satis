@@ -379,6 +379,10 @@ public static class TenantSchemaEnsuring
                 ALTER TABLE [Sales] ADD [CardAmount] decimal(18,2) NOT NULL CONSTRAINT [DF_Sales_CardAmount] DEFAULT 0;
             IF COL_LENGTH(N'Sales', N'AccountsPosted') IS NULL
                 ALTER TABLE [Sales] ADD [AccountsPosted] bit NOT NULL CONSTRAINT [DF_Sales_AccountsPosted] DEFAULT 0;
+            IF COL_LENGTH(N'Sales', N'PosAccountId') IS NULL
+                ALTER TABLE [Sales] ADD [PosAccountId] int NULL;
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'AskPosAccount') IS NULL
+                ALTER TABLE [Settings] ADD [AskPosAccount] bit NOT NULL CONSTRAINT [DF_Settings_AskPos] DEFAULT 0;
             IF OBJECT_ID(N'Products', N'U') IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_Barcode' AND object_id = OBJECT_ID(N'Products'))
                 CREATE INDEX [IX_Products_Barcode] ON [Products]([Barcode]);

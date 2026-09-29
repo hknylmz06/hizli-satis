@@ -7,4 +7,5 @@ public class AppSetting
     public string Currency { get; set; } = "TRY";
     public decimal DefaultVatRate { get; set; } = 20;
     public bool AutoFiscalReceipt { get; set; } = true;
+    public bool AskPosAccount { get; set; }
 }
