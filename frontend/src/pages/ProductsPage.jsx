@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Cpu, Layers, Package, Palette, Pencil, Percent, Plus, Shirt, Star, Tag, Trash2, UserCog, X } from 'lucide-react'
 import { api } from '../api'
@@ -83,6 +83,8 @@ export default function ProductsPage() {
   const [sizes, setSizes] = useState([])
   const [colors, setColors] = useState([])
   const [form, setForm] = useState(emptyProduct)
+  const formBarcodeRef = useRef(form.barcode)
+  formBarcodeRef.current = form.barcode
   const [variantRows, setVariantRows] = useState([])
   const [pickSize, setPickSize] = useState('')
   const [pickColor, setPickColor] = useState('')
@@ -163,8 +165,10 @@ export default function ProductsPage() {
     const code = String(raw ?? form.barcode).trim()
     if (!code || code.length < 3) return
     if (raw === undefined && editingId) return
+    const stillSame = () => formBarcodeRef.current.trim() === code
     try {
       const found = await api(`/api/products/by-barcode/${encodeURIComponent(code)}`, { token: session.token })
+      if (!stillSame()) return
       setForm((prev) => ({
         ...prev,
         name: found.name || prev.name,
@@ -180,6 +184,7 @@ export default function ProductsPage() {
     }
     try {
       const found = await api(`/api/catalog/barcode/${encodeURIComponent(code)}`, { token: session.token })
+      if (!stillSame()) return
       const category = categories.find((c) => c.name && found.categoryName && c.name.toLowerCase() === String(found.categoryName).toLowerCase())
       setForm((prev) => ({
         ...prev,
@@ -189,11 +194,19 @@ export default function ProductsPage() {
         unit: found.unit || prev.unit,
         categoryId: category ? String(category.id) : prev.categoryId
       }))
-      setLookup(`Ana katalogda bulundu: ${found.name}`)
+      setLookup(`${found.name} isimli ürün stokta yok. Kart bilgileri doldu.`)
     } catch {
-      setLookup('Kayıtlarda bu barkod yok. Yeni kart olarak kaydedebilirsin.')
+      if (stillSame()) setLookup('Kayıtlarda bu barkod yok. Yeni kart olarak kaydedebilirsin.')
     }
   }
+
+  useEffect(() => {
+    if (!showModal || editingId) return
+    const code = form.barcode.trim()
+    if (code.length < 3) return
+    const timer = setTimeout(() => { lookupBarcode(code) }, 400)
+    return () => clearTimeout(timer)
+  }, [form.barcode, showModal, editingId, categories])
 
   function addVariantRow(size, color) {
     const sizeName = size || pickSize
