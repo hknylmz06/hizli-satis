@@ -766,6 +766,12 @@ export default function QuickSalePage() {
     const payMethod = method || paymentMethod
     setPaymentMethod(payMethod)
     if (!cart.length || busy) return
+    if (fiscal?.isEnabled && !fiscal?.isPaired) {
+      setError(fiscal.needsAssignment
+        ? 'Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
+        : 'Satış yapamazsın. Fiyat gör modundasın.')
+      return
+    }
     if (payMethod === 'Veresiye' && !canCredit) {
       setError('Veresiye satış yetkin yok.')
       return
@@ -876,8 +882,13 @@ export default function QuickSalePage() {
           <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
-        {fiscal?.needsAssignment && (
-          <p className="mb-2 text-[11px] font-bold text-amber-200">Bu kullanıcıya yazarkasa tanımlı değil. Fiş yalnız kendi kasası olan kasiyerden basılır.</p>
+        {priceLook && (
+          <div className="mb-2 p-2 bg-amber-950 border border-amber-500/60 rounded-2xl text-amber-200 text-[11px] font-bold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {fiscal?.needsAssignment
+              ? 'FİYAT GÖR MODU. Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
+              : 'FİYAT GÖR MODU. Satış yapamazsın. Yazarkasa eşleşmedi.'}
+          </div>
         )}
 
         <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-2">
@@ -902,11 +913,6 @@ export default function QuickSalePage() {
           <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ürün Ara..." className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-2xl text-white text-xs outline-none" />
         </div>
 
-        {priceLook && (
-          <div className="mb-2 p-2 bg-amber-950 border border-amber-500/60 rounded-2xl text-amber-200 text-[11px] font-bold flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" /> FİYAT GÖR MODU (Satış Kilitli)
-          </div>
-        )}
         {error && (
           <div className="mb-2 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
             <span className="flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{error}</span>
@@ -1171,10 +1177,10 @@ export default function QuickSalePage() {
         )}
 
         <div className="grid grid-cols-2 gap-2.5">
-          <button type="button" disabled={!cart.length || busy} onClick={() => checkout('Nakit')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Banknote className="w-6 h-6" /> NAKİT (F4)</button>
-          <button type="button" disabled={!cart.length || busy} onClick={() => checkout('KrediKarti')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-center gap-2 disabled:opacity-40"><CreditCard className="w-6 h-6" /> KART (F8)</button>
-          <button type="button" disabled={!cart.length || busy} onClick={openSplit} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Layers className="w-6 h-6" /> PARÇALI (F10)</button>
-          <button type="button" disabled={!cart.length || busy || !canCredit} onClick={() => checkout('Veresiye')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Users className="w-6 h-6" /> VERESİYE (F9)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('Nakit')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Banknote className="w-6 h-6" /> NAKİT (F4)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('KrediKarti')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-center gap-2 disabled:opacity-40"><CreditCard className="w-6 h-6" /> KART (F8)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={openSplit} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Layers className="w-6 h-6" /> PARÇALI (F10)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook || !canCredit} onClick={() => checkout('Veresiye')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Users className="w-6 h-6" /> VERESİYE (F9)</button>
         </div>
         <button type="button" disabled={!cart.length || busy} onClick={() => setError('Fatura kesimi sıradaki adım. Satışı nakit, kart veya veresiye ile tamamlayın.')} className="w-full py-5 rounded-2xl text-base font-black border-2 border-purple-500/50 text-purple-300 bg-slate-950 flex items-center justify-center gap-2 disabled:opacity-40">
           <FileText className="w-5 h-5" /> FATURA KES (F12)

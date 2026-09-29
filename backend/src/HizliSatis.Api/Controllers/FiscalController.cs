@@ -51,9 +51,17 @@ public class FiscalController(TenantDbContextFactory tenantDbFactory) : Controll
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureFiscalTableAsync(db, ct);
         var mine = await ResolveForUserAsync(db, CurrentUserId(), ct);
-        return mine is null
-            ? Ok(new { isEnabled = false, isPaired = false, deviceHost = "", model = "", needsAssignment = true })
-            : Ok(MapRegister(mine));
+        if (mine is not null) return Ok(MapRegister(mine));
+        var fiscalRequired = await db.FiscalRegisters.AsNoTracking().AnyAsync(x => x.IsEnabled, ct);
+        return Ok(new
+        {
+            isEnabled = fiscalRequired,
+            isPaired = false,
+            deviceHost = "",
+            model = "",
+            needsAssignment = true,
+            priceOnly = fiscalRequired
+        });
     }
 
     [HttpGet("devices")]
