@@ -46,14 +46,21 @@ function numericIds(ids) {
 
 export async function fetchShortcuts(token) {
   const remote = await api('/api/pos/shortcuts', { token })
-  const ids = Array.isArray(remote) ? remote : []
+  const products = Array.isArray(remote?.products) ? remote.products : []
+  const ids = numericIds(Array.isArray(remote?.ids) ? remote.ids : (Array.isArray(remote) ? remote : products.map((item) => item.id)))
   if (ids.length) {
     localStorage.setItem('pos-shortcuts', JSON.stringify(ids))
-    return ids
+    return { ids, products }
   }
   const local = numericIds(readLocalShortcuts())
-  if (!local.length) return []
-  return storeShortcuts(token, local)
+  if (!local.length) return { ids: [], products: [] }
+  const saved = await storeShortcuts(token, local)
+  if (!saved.length) return { ids: [], products: [] }
+  const again = await api('/api/pos/shortcuts', { token })
+  const nextProducts = Array.isArray(again?.products) ? again.products : []
+  const nextIds = numericIds(Array.isArray(again?.ids) ? again.ids : saved)
+  localStorage.setItem('pos-shortcuts', JSON.stringify(nextIds))
+  return { ids: nextIds, products: nextProducts }
 }
 
 export async function storeShortcuts(token, ids) {

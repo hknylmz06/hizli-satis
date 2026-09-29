@@ -23,7 +23,26 @@ public class PosShortcutsController(TenantDbContextFactory tenantDbFactory) : Co
             .ThenBy(x => x.Id)
             .Select(x => x.ProductId)
             .ToListAsync(ct);
-        return Ok(ids);
+        var rows = await db.Products.AsNoTracking()
+            .Where(p => ids.Contains(p.Id) && p.IsActive)
+            .Select(p => new
+            {
+                p.Id,
+                p.Name,
+                p.Barcode,
+                p.SalePrice,
+                p.VatRate,
+                p.StockQuantity,
+                p.Unit,
+                p.Image,
+                Variants = p.Variants
+                    .OrderBy(v => v.SizeName).ThenBy(v => v.ColorName)
+                    .Select(v => new { v.Id, v.SizeName, v.ColorName, v.StockQuantity })
+                    .ToList()
+            })
+            .ToListAsync(ct);
+        var products = ids.Select(id => rows.FirstOrDefault(p => p.Id == id)).Where(p => p is not null).ToList();
+        return Ok(new { ids = products.Select(p => p!.Id), products });
     }
 
     [HttpPut]

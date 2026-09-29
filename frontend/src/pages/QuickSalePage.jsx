@@ -104,6 +104,7 @@ export default function QuickSalePage() {
   const [weightAsk, setWeightAsk] = useState(null)
   const [shortcutMode, setShortcutMode] = useState('select')
   const [shortcutSearch, setShortcutSearch] = useState('')
+  const [shortcutHits, setShortcutHits] = useState([])
   const [shortcutForm, setShortcutForm] = useState({ name: '', barcode: '', salePrice: '', vatRate: '20', stockQuantity: '100', imageUrl: '' })
   const [shortcutError, setShortcutError] = useState('')
   const inputRef = useRef(null)
@@ -119,14 +120,9 @@ export default function QuickSalePage() {
   }
 
   useEffect(() => {
-    api('/api/products', { token: session.token }).then((list) => {
-      const rows = Array.isArray(list) ? list : []
-      setProducts(rows)
-      try {
-        const stored = JSON.parse(localStorage.getItem('pos-images') || '{}')
-        const pending = Object.entries(stored).filter(([id, url]) => url && rows.some((product) => String(product.id).toLowerCase() === String(id).toLowerCase()) && !rows.find((product) => String(product.id).toLowerCase() === String(id).toLowerCase())?.image)
-        pending.forEach(([id, url]) => saveImage(id, url).catch(() => {}))
-      } catch { /* eski tarayıcı resmi okunamadı */ }
+    fetchShortcuts(session.token).then((pack) => {
+      setShortcuts(pack.ids || [])
+      setProducts(pack.products || [])
     }).catch(() => {})
     api('/api/categories', { token: session.token }).then((list) => {
       const rows = Array.isArray(list) ? list : []
@@ -150,7 +146,6 @@ export default function QuickSalePage() {
     }).catch(() => {})
     api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
     api('/api/fiscal/settings', { token: session.token }).then(setFiscal).catch(() => setFiscal(null))
-    fetchShortcuts(session.token).then(setShortcuts).catch(() => {})
     inputRef.current?.focus()
   }, [session.token])
 
@@ -265,6 +260,19 @@ export default function QuickSalePage() {
     setBoard(category.id)
     setCategoryPicker(false)
   }
+
+  useEffect(() => {
+    if (!shortcutOpen || shortcutMode !== 'select') return
+    const q = shortcutSearch.trim()
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ page: '1', pageSize: '20' })
+      if (q) params.set('q', q)
+      api(`/api/products?${params}`, { token: session.token })
+        .then((page) => setShortcutHits(page.items || []))
+        .catch(() => setShortcutHits([]))
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [shortcutOpen, shortcutMode, shortcutSearch, session.token])
 
   function openShortcutModal() {
     setShortcutError('')
@@ -656,8 +664,8 @@ export default function QuickSalePage() {
     if (payMethod === 'Parcali') msg += ` | Nakit ${money(result.cashAmount)} · POS ${money(result.cardAmount)}`
     if (payMethod !== 'Veresiye' && fiscal?.isEnabled && fiscal?.isPaired) msg += ' | Fiş basıldı'
     setMessage(msg)
-    const fresh = await api('/api/products', { token: session.token })
-    setProducts(fresh)
+    const pack = await fetchShortcuts(session.token).catch(() => null)
+    if (pack?.products) setProducts(pack.products)
     inputRef.current?.focus()
   }
 
@@ -1170,10 +1178,7 @@ export default function QuickSalePage() {
               <div className="space-y-2">
                 <input value={shortcutSearch} onChange={(e) => setShortcutSearch(e.target.value)} placeholder="Ürün adı veya barkod" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
                 <div className="max-h-52 overflow-y-auto space-y-1">
-                  {products.filter((product) => {
-                    const q = shortcutSearch.trim().toLowerCase()
-                    return !q || product.name.toLowerCase().includes(q) || (product.barcode || '').includes(q)
-                  }).map((product) => {
+                  {shortcutHits.map((product) => {
                     const pinned = isOnBoard(product.id)
                     return (
                       <div key={product.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-950 border border-slate-800">
@@ -1184,7 +1189,7 @@ export default function QuickSalePage() {
                         {pinned ? (
                           <button type="button" onClick={() => unpinFromBoard(product.id)} className="px-2 py-1 rounded-lg bg-rose-700 text-[11px] font-bold">Kaldır</button>
                         ) : (
-                          <button type="button" onClick={() => { pinToBoard(product.id); setShortcutOpen(false); setMessage(`${product.name} eklendi.`) }} className="px-2 py-1 rounded-lg bg-emerald-600 text-[11px] font-bold">+ Ekle</button>
+                          <button type="button" onClick={() => { pinToBoard(product.id); setProducts((prev) => prev.some((item) => sameId(item.id, product.id)) ? prev : [...prev, product]); setShortcutOpen(false); setMessage(`${product.name} eklendi.`) }} className="px-2 py-1 rounded-lg bg-emerald-600 text-[11px] font-bold">+ Ekle</button>
                         )}
                       </div>
                     )
