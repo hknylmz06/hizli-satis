@@ -670,7 +670,7 @@ export default function ReportsPage() {
                           <tr><td colSpan="4" className="text-slate-500">Bu aralıkta satış yok.</td></tr>
                         ) : days.map((day) => (
                           <tr key={day.date}>
-                            <td className="font-mono">{new Date(day.date).toLocaleDateString('tr-TR')}</td>
+                            <td className="font-mono">{parseDay(day.date).toLocaleDateString('tr-TR')}</td>
                             <td className="font-mono">{day.count} fiş</td>
                             <td className="font-mono">{money(day.revenue)}</td>
                             <td className="font-mono text-emerald-300">{money(day.profit)}</td>
