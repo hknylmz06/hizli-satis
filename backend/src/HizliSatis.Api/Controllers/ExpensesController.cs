@@ -50,8 +50,8 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
         var commission = rows.Sum(row => row.Commission);
         return Ok(new
         {
-            from = start,
-            to = end.AddDays(-1),
+            from = (start + Turkey).ToString("yyyy-MM-dd"),
+            to = (end + Turkey).AddDays(-1).ToString("yyyy-MM-dd"),
             summary = new
             {
                 income,
@@ -194,12 +194,15 @@ public class ExpensesController(TenantDbContextFactory tenantDbFactory) : Contro
         return rows;
     }
 
+    private static readonly TimeSpan Turkey = TimeSpan.FromHours(3);
+
     private static (DateTime start, DateTime end) Range(DateTime? from, DateTime? to)
     {
-        var start = (from ?? new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1)).Date;
-        var end = (to ?? DateTime.UtcNow).Date.AddDays(1);
-        if (end <= start) end = start.AddDays(1);
-        return (start, end);
+        var today = DateTime.UtcNow.Add(Turkey).Date;
+        var startLocal = (from ?? new DateTime(today.Year, today.Month, 1)).Date;
+        var endLocal = (to ?? today).Date.AddDays(1);
+        if (endLocal <= startLocal) endLocal = startLocal.AddDays(1);
+        return (startLocal - Turkey, endLocal - Turkey);
     }
 
     private sealed record LedgerRow(DateTime At, string Kind, string KindLabel, int AccountId, string AccountName, string Category, decimal Gross, decimal Commission, decimal Net)
