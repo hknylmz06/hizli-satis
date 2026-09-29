@@ -179,3 +179,150 @@
     @apply inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500;
   }
 }
+
+/* Açık tema: zemin açılır, yazı koyu kalır. Renkli düğmelerde yazı beyazdır. */
+html.light {
+  color-scheme: light;
+}
+html.light body,
+html.light main {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+html.light aside,
+html.light [class*="bg-slate-950"],
+html.light [class*="070b16"] {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+html.light [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html.light [class*="bg-slate-800"] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html.light [class*="border-slate-800"],
+html.light [class*="border-slate-700"],
+html.light [class*="border-slate-600"] {
+  border-color: #cbd5e1 !important;
+}
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4,
+html.light h5,
+html.light h6,
+html.light label,
+html.light p,
+html.light span,
+html.light td,
+html.light th,
+html.light li,
+html.light .text-white,
+html.light [class*="text-slate-100"],
+html.light [class*="text-slate-200"],
+html.light [class*="text-slate-300"] {
+  color: #0f172a !important;
+}
+html.light [class*="text-slate-400"],
+html.light [class*="text-slate-500"],
+html.light .muted {
+  color: #334155 !important;
+}
+html.light .text-emerald-300,
+html.light .text-emerald-400,
+html.light .text-emerald-200 {
+  color: #047857 !important;
+}
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light select,
+html.light textarea,
+html.light .legacy-page input,
+html.light .legacy-page select,
+html.light .legacy-page textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #64748b !important;
+}
+html.light .legacy-page .panel,
+html.light .legacy-page h1,
+html.light .legacy-page h2,
+html.light .legacy-page label,
+html.light .legacy-page th,
+html.light .legacy-page td {
+  color: #0f172a !important;
+}
+html.light .legacy-page .panel {
+  background-color: #ffffff !important;
+}
+html.light .legacy-page button:not(.pair):not(.save):not(.toggle):not(.icon) {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html.light .legacy-page button.primary,
+html.light .legacy-page button.seg-btn.on,
+html.light .legacy-page .def-side button.nav.on {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+  border-color: #059669 !important;
+}
+html.light .fiscal-screen button.pair {
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+html.light .fiscal-screen button.save {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+html.light button[class*="bg-emerald-"],
+html.light button[class*="bg-emerald-"] *,
+html.light button[class*="bg-blue-"],
+html.light button[class*="bg-blue-"] *,
+html.light button[class*="bg-indigo-"],
+html.light button[class*="bg-indigo-"] *,
+html.light button[class*="bg-rose-"],
+html.light button[class*="bg-rose-"] *,
+html.light button[class*="bg-red-"],
+html.light button[class*="bg-red-"] *,
+html.light button[class*="bg-violet-"],
+html.light button[class*="bg-violet-"] *,
+html.light button[class*="bg-purple-"],
+html.light button[class*="bg-purple-"] *,
+html.light button[class*="bg-amber-5"],
+html.light button[class*="bg-amber-6"],
+html.light [class*="from-emerald-"],
+html.light [class*="from-emerald-"] *,
+html.light [class*="from-teal-"],
+html.light [class*="from-teal-"] *,
+html.light [class*="from-blue-"],
+html.light [class*="from-blue-"] *,
+html.light [class*="from-indigo-"],
+html.light [class*="from-indigo-"] *,
+html.light [class*="from-violet-"],
+html.light [class*="from-violet-"] *,
+html.light [class*="from-purple-"],
+html.light [class*="from-purple-"] *,
+html.light [class*="from-cyan-"],
+html.light [class*="from-cyan-"] *,
+html.light [class*="from-sky-"],
+html.light [class*="from-sky-"] *,
+html.light [class*="from-amber-"],
+html.light [class*="from-amber-"] *,
+html.light [class*="from-orange-"],
+html.light [class*="from-orange-"] *,
+html.light [class*="from-rose-"],
+html.light [class*="from-rose-"] *,
+html.light [class*="from-green-"],
+html.light [class*="from-green-"] * {
+  color: #ffffff !important;
+}

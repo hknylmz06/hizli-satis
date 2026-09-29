@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../auth'
 import { allows } from '../permissions'
+import { ThemeToggle } from '../theme'
 
 const sections = [
   {
@@ -138,6 +139,10 @@ export default function Sidebar() {
               <div className="font-mono">{time}</div>
             </div>
           )}
+          <ThemeToggle
+            labeled={!collapsed}
+            className="w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-900 border border-slate-800 text-slate-200"
+          />
           <button
             type="button"
             onClick={() => { logout(); navigate('/') }}
