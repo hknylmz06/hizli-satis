@@ -235,13 +235,14 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
         var finBody = await finRes.Content.ReadAsStringAsync();
         logger.LogInformation("Finalize HTTP {Code}: {Body}", (int)finRes.StatusCode, Truncate(finBody, 500));
 
-        if ((int)finRes.StatusCode == 206)
+        if (IsPaperProblem((int)finRes.StatusCode, finBody))
         {
             return Results.Ok(new
             {
                 ok = false,
+                paper = true,
                 step = "finalize",
-                message = "Ödeme alındı ama fiş basılamadı (kağıt/pil?).",
+                message = "Yazarkasada kağıt bitti veya kapak açık. Kağıdı takıp devam et.",
                 documentId,
                 raw = Truncate(finBody, 1000)
             });
@@ -254,13 +255,15 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
             {
                 ok = false,
                 step = "finalize",
-                message = ExtractErrorMessage(finBody) ?? $"Fiş basılamadı: {(int)finRes.StatusCode}",
+                message = "Ödeme alınamadı. Yazarkasadan onay gelmedi.",
                 documentId,
                 raw = Truncate(finBody, 1000)
             });
         }
 
         var receiptNo = ExtractReceiptNo(finBody);
+        if (string.IsNullOrWhiteSpace(receiptNo) && !string.IsNullOrWhiteSpace(documentId))
+            receiptNo = documentId.Length >= 6 ? documentId[^6..] : documentId;
         return Results.Ok(new
         {
             ok = true,
@@ -281,6 +284,76 @@ app.MapPost("/sale/print", async (SalePrintRequest request, IHttpClientFactory h
             deviceBaseUrl = baseUrl
         });
     }
+});
+
+app.MapPost("/document/resume", async (DeviceActionRequest request, IHttpClientFactory httpClientFactory) =>
+{
+    var identity = NormalizeIdentity(request);
+    var (client, baseUrl) = CreateClient(httpClientFactory, request.DeviceHost, request.DevicePort);
+    var documentId = request.DocumentId;
+    if (string.IsNullOrWhiteSpace(documentId))
+        documentId = await ReadActiveDocumentIdAsync(client, baseUrl, identity);
+
+    if (!string.IsNullOrWhiteSpace(documentId))
+    {
+        using var resumeReq = CreateRequest(HttpMethod.Post, $"{baseUrl}/v1/documents/{documentId}/resume", identity.SoftwareId, identity.SerialNo, identity.HardwareId);
+        resumeReq.Content = new StringContent("", Encoding.UTF8, "application/json");
+        try
+        {
+            using var resumeRes = await client.SendAsync(resumeReq);
+            var body = await resumeRes.Content.ReadAsStringAsync();
+            if (!resumeRes.IsSuccessStatusCode && !IsSuccessStatus(body))
+            {
+                return Results.Ok(new
+                {
+                    ok = false,
+                    message = ExtractErrorMessage(body) ?? "Fiş devam ettirilemedi.",
+                    documentId
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            return Results.Ok(new { ok = false, message = $"Fiş devam hatası: {ex.Message}", documentId });
+        }
+    }
+
+    return Results.Ok(new
+    {
+        ok = true,
+        message = "Yazarkasa bağlantısı tazelendi, kağıt değişimi onaylandı.",
+        documentId
+    });
+});
+
+app.MapPost("/document/cancel", async (DeviceActionRequest request, IHttpClientFactory httpClientFactory) =>
+{
+    var identity = NormalizeIdentity(request);
+    var (client, baseUrl) = CreateClient(httpClientFactory, request.DeviceHost, request.DevicePort);
+    var documentId = request.DocumentId;
+    if (string.IsNullOrWhiteSpace(documentId))
+        documentId = await ReadActiveDocumentIdAsync(client, baseUrl, identity);
+
+    if (!string.IsNullOrWhiteSpace(documentId))
+        await TryCancelAsync(client, baseUrl, documentId, identity);
+
+    try
+    {
+        using var rootCancel = CreateRequest(HttpMethod.Post, $"{baseUrl}/v1/documents/cancel", identity.SoftwareId, identity.SerialNo, identity.HardwareId);
+        rootCancel.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        await client.SendAsync(rootCancel);
+    }
+    catch
+    {
+        // genel iptal desteklenmeyebilir
+    }
+
+    return Results.Ok(new
+    {
+        ok = true,
+        message = "Askıdaki fiş iptal edildi.",
+        documentId
+    });
 });
 
 app.Run();
@@ -401,6 +474,51 @@ static string MapPayment(string? method) => method?.Trim().ToLowerInvariant() sw
     "veresiye" or "open_account" or "cari" => "OPEN_ACCOUNT",
     _ => "CASH"
 };
+
+static bool IsPaperProblem(int status, string body) =>
+    status == 206 ||
+    ContainsIgnoreCase(body, "PAPER") ||
+    ContainsIgnoreCase(body, "kagit") ||
+    ContainsIgnoreCase(body, "kağıt") ||
+    ContainsIgnoreCase(body, "NO_PAPER");
+
+static PairTestRequest NormalizeIdentity(DeviceActionRequest request)
+{
+    if (string.IsNullOrWhiteSpace(request.SoftwareId))
+        request.SoftwareId = "9217033991";
+    var hw = NormalizeHardwareId(request.HardwareId);
+    if (string.IsNullOrWhiteSpace(hw) || hw.Contains(':'))
+        hw = "ABCD1234";
+    request.HardwareId = hw;
+    return new PairTestRequest
+    {
+        DeviceHost = request.DeviceHost,
+        DevicePort = request.DevicePort,
+        SerialNo = request.SerialNo,
+        SoftwareId = request.SoftwareId,
+        HardwareId = hw
+    };
+}
+
+static async Task<string?> ReadActiveDocumentIdAsync(HttpClient client, string baseUrl, DeviceIdentity identity)
+{
+    try
+    {
+        using var statusReq = CreateRequest(HttpMethod.Get, $"{baseUrl}/v1/status", identity.SoftwareId, identity.SerialNo, identity.HardwareId);
+        using var statusRes = await client.SendAsync(statusReq);
+        var body = await statusRes.Content.ReadAsStringAsync();
+        if (!TryParse(body, out var root)) return ExtractDocumentIdFromInstance(body);
+        if (TryGetProp(root, "data", out var data) &&
+            TryGetProp(data, "activeDocument", out var active) &&
+            TryGetProp(active, "documentId", out var id))
+            return id.GetString();
+        return ExtractDocumentIdFromInstance(body) ?? ExtractDocumentId(body);
+    }
+    catch
+    {
+        return null;
+    }
+}
 
 static bool IsSuccessStatus(string json)
 {
@@ -591,6 +709,16 @@ sealed class SalePrintItem
     public decimal Quantity { get; set; } = 1;
     public decimal UnitPrice { get; set; }
     public decimal VatRate { get; set; } = 20;
+}
+
+sealed class DeviceActionRequest
+{
+    public string DeviceHost { get; set; } = "";
+    public int DevicePort { get; set; } = 4443;
+    public string? SerialNo { get; set; }
+    public string? SoftwareId { get; set; }
+    public string? HardwareId { get; set; }
+    public string? DocumentId { get; set; }
 }
 
 sealed class SalePrintRequest : DeviceIdentity

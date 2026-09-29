@@ -72,6 +72,8 @@ export default function QuickSalePage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [fiscal, setFiscal] = useState(null)
+  const [fiscalWait, setFiscalWait] = useState('')
+  const [paperModal, setPaperModal] = useState(null)
   const [middleTab, setMiddleTab] = useState('quick')
   const [images, setImages] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pos-images') || '{}') } catch { return {} }
@@ -490,14 +492,34 @@ export default function QuickSalePage() {
     setDeptAmount('')
   }
 
-  async function printFiscalReceipt(saleResult, cartSnapshot, payMethod, payable, split) {
+  function fiscalIdentity() {
+    return {
+      deviceHost: fiscal.deviceHost,
+      devicePort: fiscal.devicePort || 4443,
+      serialNo: fiscal.serialNo || null,
+      softwareId: fiscal.softwareId || null,
+      hardwareId: fiscal.hardwareId || null
+    }
+  }
+
+  async function postAgent(path, extra) {
+    const agentBase = (fiscal?.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
+    const res = await fetch(`${agentBase}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...fiscalIdentity(), ...extra })
+    })
+    return res.json().catch(() => null)
+  }
+
+  async function printFiscalReceipt(cartSnapshot, payMethod, payable, split) {
     if (!fiscal?.isEnabled || !fiscal?.isPaired || !fiscal?.deviceHost) return { skipped: true }
     const agentBase = (fiscal.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
     try {
       const health = await fetch(`${agentBase}/health`, { cache: 'no-store' })
       if (!health.ok) throw new Error('kapalı')
     } catch {
-      return { ok: false, message: 'Satış kaydedildi ama ajan kapalı — fiş basılmadı.' }
+      return { ok: false, message: 'Yazarkasa ajanı kapalı. Sepet duruyor.' }
     }
     const gross = cartSnapshot.reduce((sum, item) => sum + lineTotal(item), 0) || 1
     try {
@@ -505,16 +527,11 @@ export default function QuickSalePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          deviceHost: fiscal.deviceHost,
-          devicePort: fiscal.devicePort || 4443,
-          serialNo: fiscal.serialNo || null,
-          softwareId: fiscal.softwareId || null,
-          hardwareId: fiscal.hardwareId || null,
+          ...fiscalIdentity(),
           paymentMethod: payMethod,
           cashAmount: split?.cash ?? null,
           cardAmount: split?.card ?? null,
           grandTotal: payable,
-          referenceCode: saleResult.receiptNo,
           items: cartSnapshot.map((item) => {
             const share = lineTotal(item) / gross
             return {
@@ -527,15 +544,63 @@ export default function QuickSalePage() {
         })
       })
       const data = await res.json().catch(() => null)
-      return data || { ok: false, message: 'Yazarkasa yanıt vermedi.' }
+      return data || { ok: false, message: 'Ödeme alınamadı. Yazarkasa yanıt vermedi.' }
     } catch (err) {
-      return { ok: false, message: err.message || 'Fiş gönderilemedi.' }
+      return { ok: false, message: 'Ödeme alınamadı. Yazarkasadan onay gelmedi.' }
     }
   }
 
-  function isFiscalCancel(text) {
-    const value = (text || '').toLocaleLowerCase('tr-TR')
-    return value.includes('vazgeç') || value.includes('vazgec')
+  async function saveCompletedSale(cartSnapshot, payMethod, split, discountAmount) {
+    const result = await api('/api/sales', {
+      method: 'POST',
+      token: session.token,
+      body: {
+        items: cartSnapshot.map((item) => (item.isDepartment
+          ? { productId: null, quantity: item.quantity, unitPrice: item.unitPrice, name: item.name, vatRate: item.vatRate }
+          : { productId: item.productId, variantId: item.variantId || null, quantity: item.quantity })),
+        paymentMethod: payMethod,
+        customerId: payMethod === 'Veresiye' ? customerId || null : null,
+        discountAmount,
+        cashAmount: split?.cash ?? null,
+        cardAmount: split?.card ?? null
+      }
+    })
+    setCart([])
+    setBarcode('')
+    setPaidAmount('')
+    setDiscount('')
+    let msg = `Satış tamam: ${result.receiptNo} — ${Number(result.grandTotal).toFixed(2)} ₺`
+    if (payMethod === 'Parcali') msg += ` | Nakit ${money(result.cashAmount)} · POS ${money(result.cardAmount)}`
+    if (payMethod !== 'Veresiye' && fiscal?.isEnabled && fiscal?.isPaired) msg += ' | Fiş basıldı'
+    setMessage(msg)
+    const fresh = await api('/api/products', { token: session.token })
+    setProducts(fresh)
+    inputRef.current?.focus()
+  }
+
+  async function resumePaper() {
+    if (!paperModal) return
+    setPaperModal((prev) => prev && ({ ...prev, loading: 'resume', error: '' }))
+    try {
+      const data = await postAgent('/document/resume', { documentId: paperModal.documentId })
+      if (!data?.ok) throw new Error(data?.message || 'Fiş devam ettirilemedi.')
+      await saveCompletedSale(paperModal.cartSnapshot, paperModal.payMethod, paperModal.split, paperModal.discountAmount)
+      setPaperModal(null)
+    } catch (err) {
+      setPaperModal((prev) => prev && ({ ...prev, loading: null, error: err.message }))
+    }
+  }
+
+  async function cancelPaper() {
+    if (!paperModal) return
+    setPaperModal((prev) => prev && ({ ...prev, loading: 'cancel', error: '' }))
+    try {
+      await postAgent('/document/cancel', { documentId: paperModal.documentId })
+    } catch {
+      /* fiş cihazda kalmış olabilir */
+    }
+    setPaperModal(null)
+    setError('Fiş iptal edildi. Ödeme alınamadı, sepet duruyor.')
   }
 
   async function checkout(method, split) {
@@ -557,49 +622,36 @@ export default function QuickSalePage() {
     const cartSnapshot = cart.map((item) => ({ ...item }))
     const payable = total
     const discountAmount = canDiscount ? cart.reduce((sum, item) => sum + lineDiscount(item), 0) + cartDiscount : 0
+    const fiscalOn = fiscal?.isEnabled && fiscal?.isPaired && fiscal?.deviceHost && payMethod !== 'Veresiye'
     try {
-      const result = await api('/api/sales', {
-        method: 'POST',
-        token: session.token,
-        body: {
-          items: cartSnapshot.map((item) => (item.isDepartment
-            ? { productId: null, quantity: item.quantity, unitPrice: item.unitPrice, name: item.name, vatRate: item.vatRate }
-            : { productId: item.productId, variantId: item.variantId || null, quantity: item.quantity })),
-          paymentMethod: payMethod,
-          customerId: payMethod === 'Veresiye' ? customerId || null : null,
-          discountAmount,
-          cashAmount: split?.cash ?? null,
-          cardAmount: split?.card ?? null
+      if (fiscalOn) {
+        const cardWait = payMethod === 'KrediKarti' || (split?.card > 0)
+        setFiscalWait(cardWait
+          ? 'Yazarkasadan kartı okutun ve onaylayın. Onay gelmezse ödeme alınamadı denir, ürünler sepette kalır.'
+          : 'Yazarkasa fişi basılıyor. Sepet onay gelene kadar duruyor.')
+        const fiscalResult = await printFiscalReceipt(cartSnapshot, payMethod, payable, split)
+        setFiscalWait('')
+        if (fiscalResult?.paper) {
+          setPaperModal({
+            message: fiscalResult.message,
+            documentId: fiscalResult.documentId || null,
+            cartSnapshot,
+            payMethod,
+            split,
+            discountAmount
+          })
+          return
         }
-      })
-      setCart([])
-      setBarcode('')
-      setPaidAmount('')
-      setDiscount('')
-      const fiscalResult = await printFiscalReceipt(result, cartSnapshot, payMethod, payable, split)
-      if (isFiscalCancel(fiscalResult?.message)) {
-        try {
-          await api(`/api/sales/${result.id}/void`, { method: 'POST', token: session.token })
-          setCart(cartSnapshot)
-          setMessage('')
-          setError('Yazarkasada vazgeçildi. Satış iptal edildi, sepet duruyor.')
-        } catch (voidErr) {
-          setMessage('')
-          setError(`Yazarkasada vazgeçildi ama satış kaydı duruyor: ${voidErr.message}`)
+        if (!fiscalResult?.ok && !fiscalResult?.skipped) {
+          setError(fiscalResult?.message || 'Ödeme alınamadı. Sepet duruyor.')
+          return
         }
-      } else {
-        let msg = `Satış tamam: ${result.receiptNo} — ${Number(result.grandTotal).toFixed(2)} ₺`
-        if (payMethod === 'Parcali') msg += ` | Nakit ${money(result.cashAmount)} · POS ${money(result.cardAmount)}`
-        if (fiscalResult?.ok) msg += fiscalResult.receiptNo ? ` | Yazarkasa fiş: ${fiscalResult.receiptNo}` : ' | Fiş basıldı'
-        else if (fiscalResult?.message) setError(fiscalResult.message)
-        setMessage(msg)
       }
-      const fresh = await api('/api/products', { token: session.token })
-      setProducts(fresh)
-      inputRef.current?.focus()
+      await saveCompletedSale(cartSnapshot, payMethod, split, discountAmount)
     } catch (err) {
       setError(err.message)
     } finally {
+      setFiscalWait('')
       setBusy(false)
     }
   }
@@ -1158,6 +1210,38 @@ export default function QuickSalePage() {
           </div>
         )
       })()}
+
+      {fiscalWait && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+          <div className="w-[420px] bg-slate-900 border border-purple-500/50 rounded-3xl p-6 text-center space-y-3">
+            <div className="text-lg font-black">Yazarkasa onayı bekleniyor</div>
+            <p className="text-sm text-purple-200">{fiscalWait}</p>
+            <p className="text-xs text-slate-400">Ürünler sepette duruyor. Onay gelmeden satış kaydı yazılmaz.</p>
+          </div>
+        </div>
+      )}
+
+      {paperModal && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+          <div className="w-[460px] bg-slate-900 border border-amber-500/50 rounded-3xl p-6 space-y-3">
+            <div className="text-lg font-black">Kağıt bitti</div>
+            <p className="text-sm text-amber-200">{paperModal.message || 'Kağıt rulosunu takıp kapağı kapatın, sonra devam edin.'}</p>
+            <ol className="text-xs text-slate-400 list-decimal list-inside space-y-1">
+              <li>Yeni kağıdı takıp kapağı kilitleyin.</li>
+              <li>Kağıt değişti, devam et deyin. Fiş tamamlanır, satış o zaman kaydolur.</li>
+            </ol>
+            {paperModal.error && <p className="text-sm text-rose-300">{paperModal.error}</p>}
+            <div className="flex gap-2">
+              <button type="button" disabled={!!paperModal.loading} onClick={resumePaper} className="flex-1 py-3 rounded-xl bg-emerald-600 font-bold disabled:opacity-50">
+                {paperModal.loading === 'resume' ? 'Devam ediyor...' : 'Kağıt değişti, devam et'}
+              </button>
+              <button type="button" disabled={!!paperModal.loading} onClick={cancelPaper} className="flex-1 py-3 rounded-xl bg-rose-700 font-bold disabled:opacity-50">
+                {paperModal.loading === 'cancel' ? 'İptal ediliyor...' : 'Fişi iptal et'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {splitOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
