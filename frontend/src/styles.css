@@ -326,3 +326,21 @@ html.light [class*="from-green-"],
 html.light [class*="from-green-"] * {
   color: #ffffff !important;
 }
+html.light .pos-tile {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+html.light .pos-tile .pos-photo {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+html.light .pos-tile .pos-name,
+html.light .pos-tile .pos-unit {
+  color: #0f172a !important;
+}
+html.light .pos-tile .pos-price,
+html.light .pos-tile .pos-add {
+  color: #047857 !important;
+}

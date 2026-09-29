@@ -63,6 +63,8 @@ public class MasterSeedService(
                 );
                 CREATE UNIQUE INDEX IX_CatalogProducts_Barcode ON CatalogProducts(Barcode);
             END
+            IF COL_LENGTH(N'CatalogProducts', N'Image') IS NULL
+                ALTER TABLE CatalogProducts ADD Image nvarchar(max) NULL;
             """,
             ct);
     }

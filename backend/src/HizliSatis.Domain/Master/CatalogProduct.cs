@@ -11,5 +11,6 @@ public class CatalogProduct
     public decimal SalePrice { get; set; }
     public bool IsDomestic { get; set; } = true;
     public string OriginCountry { get; set; } = "TR";
+    public string? Image { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

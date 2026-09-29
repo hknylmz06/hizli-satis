@@ -316,7 +316,7 @@ export default function QuickSalePage() {
   }
 
   function productImage(product) {
-    return images[product.id] || product.image || presetImage(product.name)
+    return images[product.id] || product.image || ''
   }
 
   async function shrinkImage(url) {
@@ -973,16 +973,21 @@ export default function QuickSalePage() {
               {visible.map((product) => {
                 const image = productImage(product)
                 return (
-                  <div key={product.id} className="rounded-2xl border-2 border-slate-700 bg-gradient-to-b from-slate-800 to-slate-900 min-h-[150px] overflow-hidden flex flex-col">
+                  <div key={product.id} className="pos-tile rounded-2xl border border-slate-700 bg-slate-900 min-h-[176px] overflow-hidden flex flex-col">
                     <button type="button" onClick={() => chooseProduct(product)} className="text-left flex flex-col flex-1">
                       {image ? (
-                        <div className="h-24 bg-slate-950 relative">
-                          <img src={image} alt="" className="w-full h-full object-cover" />
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-300 absolute top-1.5 right-1.5" />
+                        <div className="pos-photo h-28 bg-slate-800 relative">
+                          <img
+                            src={image}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none' }}
+                          />
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-300 absolute top-1.5 right-1.5 drop-shadow" />
                         </div>
                       ) : (
-                        <div className="h-12 px-2.5 flex items-center justify-between border-b border-slate-800">
-                          <Package className="w-4 h-4 text-slate-500" />
+                        <div className="pos-photo h-16 px-2.5 flex items-center justify-between border-b border-slate-700 bg-slate-800">
+                          <Package className="w-5 h-5 text-slate-400" />
                           <span
                             role="button"
                             onClick={(e) => {
@@ -990,15 +995,15 @@ export default function QuickSalePage() {
                               const url = window.prompt('Resim adresi', '')
                               if (url) saveImage(product.id, url)
                             }}
-                            className="text-[10px] text-emerald-400 font-bold"
+                            className="pos-add text-[11px] text-emerald-300 font-bold"
                           >+ Resim Ekle</span>
                         </div>
                       )}
-                      <div className="p-2 flex-1 flex flex-col justify-between">
-                        <h4 className="font-bold text-white text-[12px] leading-snug line-clamp-2">{product.name}</h4>
-                        <div className="pt-1 border-t border-slate-700/60 flex justify-between items-end">
-                          <span className="text-[10px] text-slate-400 font-mono border border-slate-800 rounded px-1">{product.unit || 'Adet'}</span>
-                          <span className="font-black text-sm text-emerald-300 font-mono">{money(product.salePrice)}</span>
+                      <div className="p-2.5 flex-1 flex flex-col justify-between gap-2">
+                        <h4 className="pos-name font-black text-white text-[13px] leading-snug line-clamp-2">{product.name}</h4>
+                        <div className="pt-1.5 border-t border-slate-700 flex justify-between items-end">
+                          <span className="pos-unit text-[10px] text-slate-300 font-mono border border-slate-600 rounded px-1">{product.unit || 'Adet'}</span>
+                          <span className="pos-price font-black text-sm text-emerald-300 font-mono">{money(product.salePrice)}</span>
                         </div>
                       </div>
                     </button>

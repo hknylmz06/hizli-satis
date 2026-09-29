@@ -42,6 +42,7 @@ public class MasterDbContext(DbContextOptions<MasterDbContext> options) : DbCont
             e.Property(x => x.CategoryName).HasMaxLength(120);
             e.Property(x => x.Unit).HasMaxLength(32);
             e.Property(x => x.OriginCountry).HasMaxLength(8);
+            e.Property(x => x.Image).HasColumnType("nvarchar(max)");
             e.Property(x => x.VatRate).HasPrecision(5, 2);
             e.Property(x => x.SalePrice).HasPrecision(18, 2);
         });
