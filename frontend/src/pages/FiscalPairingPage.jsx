@@ -38,7 +38,7 @@ function readLimit() {
   return value > 0 ? String(value) : '12000'
 }
 
-export default function FiscalPairingPage() {
+export default function FiscalPairingPage({ embedded = false }) {
   const { session } = useAuth()
   const [devices, setDevices] = useState([])
   const [users, setUsers] = useState([])
@@ -283,7 +283,7 @@ export default function FiscalPairingPage() {
   const field = 'w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-sky-500'
 
   return (
-    <div className="fiscal-screen p-4 md:p-6">
+    <div className={embedded ? 'fiscal-screen' : 'fiscal-screen p-4 md:p-6'}>
       <div className="bg-white text-slate-800 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-200">
           <div className="flex items-start gap-3">

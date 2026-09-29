@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
 
-export default function OtherSettingsPage() {
+export default function OtherSettingsPage({ embedded = false }) {
   const { session } = useAuth()
   const [autoReceipt, setAutoReceipt] = useState(true)
   const [loading, setLoading] = useState(true)
@@ -37,7 +37,7 @@ export default function OtherSettingsPage() {
   }
 
   return (
-    <div className="fiscal-screen p-4 md:p-6">
+    <div className={embedded ? 'fiscal-screen' : 'fiscal-screen p-4 md:p-6'}>
       <div className="max-w-3xl mx-auto bg-white border border-sky-100 rounded-3xl shadow-sm p-5 md:p-6 space-y-4">
         <div>
           <h1>Diğer Ayarlar</h1>
