@@ -63,21 +63,36 @@ public static class FifoStock
     public static async Task<decimal> ConsumeAsync(
         TenantDbContext db,
         SaleItem item,
-        Product product,
+        int productId,
+        decimal purchasePrice,
+        DateTime createdAt,
         int? variantId,
         decimal onHand,
-        CancellationToken ct)
+        CancellationToken ct,
+        List<StockBatch>? pool = null)
     {
-        var batches = await db.StockBatches
-            .Where(b => b.ProductId == product.Id && b.VariantId == variantId && b.RemainingQuantity > 0)
-            .OrderBy(b => b.PurchasedAt).ThenBy(b => b.Id)
-            .ToListAsync(ct);
+        List<StockBatch> batches;
+        if (pool is null)
+        {
+            batches = await db.StockBatches
+                .Where(b => b.ProductId == productId && b.VariantId == variantId && b.RemainingQuantity > 0)
+                .OrderBy(b => b.PurchasedAt).ThenBy(b => b.Id)
+                .ToListAsync(ct);
+        }
+        else
+        {
+            batches = pool
+                .Where(b => b.ProductId == productId && b.VariantId == variantId && b.RemainingQuantity > 0)
+                .OrderBy(b => b.PurchasedAt).ThenBy(b => b.Id)
+                .ToList();
+        }
 
         if (batches.Count == 0 && onHand > 0)
         {
-            var opening = Batch(product.Id, variantId, onHand, product.PurchasePrice, "Acilis", product.CreatedAt, null);
+            var opening = Batch(productId, variantId, onHand, purchasePrice, "Acilis", createdAt, null);
             db.StockBatches.Add(opening);
             batches.Add(opening);
+            pool?.Add(opening);
         }
 
         decimal left = item.Quantity;
@@ -101,7 +116,7 @@ public static class FifoStock
 
         if (left > 0)
         {
-            var fallback = batches.LastOrDefault()?.UnitCost ?? product.PurchasePrice;
+            var fallback = batches.LastOrDefault()?.UnitCost ?? purchasePrice;
             cost += left * fallback;
             db.SaleItemBatchUsages.Add(new SaleItemBatchUsage
             {
