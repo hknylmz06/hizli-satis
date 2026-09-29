@@ -16,6 +16,7 @@ public class Sale
     public decimal CostTotal { get; set; }
     public decimal CashAmount { get; set; }
     public decimal CardAmount { get; set; }
+    public int? PosAccountId { get; set; }
     public bool AccountsPosted { get; set; }
     public string? CashierUsername { get; set; }
     public List<SaleItem> Items { get; set; } = [];

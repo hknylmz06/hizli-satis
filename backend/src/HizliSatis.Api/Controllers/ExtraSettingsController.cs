@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HizliSatis.Api.Controllers;
 
-public record ExtraSettingsRequest(bool AutoFiscalReceipt);
+public record ExtraSettingsRequest(bool? AutoFiscalReceipt, bool? AskPosAccount);
 
 [ApiController]
 [Authorize(Roles = "TenantUser")]
@@ -28,7 +28,8 @@ public class ExtraSettingsController(TenantDbContextFactory tenantDbFactory) : C
     {
         await using var db = tenantDbFactory.Create();
         var row = await LoadAsync(db, ct);
-        row.AutoFiscalReceipt = request.AutoFiscalReceipt;
+        if (request.AutoFiscalReceipt is bool auto) row.AutoFiscalReceipt = auto;
+        if (request.AskPosAccount is bool ask) row.AskPosAccount = ask;
         await db.SaveChangesAsync(ct);
         return Ok(Map(row));
     }
@@ -44,5 +45,5 @@ public class ExtraSettingsController(TenantDbContextFactory tenantDbFactory) : C
         return row;
     }
 
-    private static object Map(AppSetting row) => new { autoFiscalReceipt = row.AutoFiscalReceipt };
+    private static object Map(AppSetting row) => new { autoFiscalReceipt = row.AutoFiscalReceipt, askPosAccount = row.AskPosAccount };
 }

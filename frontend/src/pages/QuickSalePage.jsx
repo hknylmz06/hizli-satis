@@ -74,6 +74,9 @@ export default function QuickSalePage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [fiscal, setFiscal] = useState(null)
+  const [askPosAccount, setAskPosAccount] = useState(false)
+  const [posAccounts, setPosAccounts] = useState([])
+  const [posAsk, setPosAsk] = useState(null)
   const [fiscalWait, setFiscalWait] = useState('')
   const [paperModal, setPaperModal] = useState(null)
   const [okcOpen, setOkcOpen] = useState(false)
@@ -154,6 +157,12 @@ export default function QuickSalePage() {
     }).catch(() => {})
     api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
     api('/api/fiscal/settings', { token: session.token }).then(setFiscal).catch(() => setFiscal(null))
+    api('/api/settings/extra', { token: session.token }).then((data) => setAskPosAccount(data.askPosAccount === true)).catch(() => setAskPosAccount(false))
+    api('/api/accounts', { token: session.token }).then((rows) => {
+      const list = (Array.isArray(rows) ? rows : []).filter((row) => row.type === 'pos')
+      list.sort((a, b) => Number(a.id) - Number(b.id))
+      setPosAccounts(list)
+    }).catch(() => setPosAccounts([]))
     inputRef.current?.focus()
   }, [session.token])
 
@@ -682,7 +691,15 @@ export default function QuickSalePage() {
     }
   }
 
-  async function saveCompletedSale(cartSnapshot, payMethod, split, discountAmount) {
+  function cardSale(payMethod, split) {
+    return payMethod === 'KrediKarti' || (payMethod === 'Parcali' && Number(split?.card) > 0)
+  }
+
+  async function saveCompletedSale(cartSnapshot, payMethod, split, discountAmount, posAccountId) {
+    if (!posAccountId && askPosAccount && cardSale(payMethod, split) && posAccounts.length > 1) {
+      setPosAsk({ cartSnapshot, payMethod, split, discountAmount })
+      return
+    }
     const result = await api('/api/sales', {
       method: 'POST',
       token: session.token,
@@ -694,9 +711,11 @@ export default function QuickSalePage() {
         customerId: payMethod === 'Veresiye' ? customerId || null : null,
         discountAmount,
         cashAmount: split?.cash ?? null,
-        cardAmount: split?.card ?? null
+        cardAmount: split?.card ?? null,
+        posAccountId: posAccountId || null
       }
     })
+    setPosAsk(null)
     setCart([])
     setBarcode('')
     setPaidAmount('')
@@ -704,6 +723,8 @@ export default function QuickSalePage() {
     let msg = `Satış tamam: ${result.receiptNo} — ${Number(result.grandTotal).toFixed(2)} ₺`
     if (payMethod === 'Parcali') msg += ` | Nakit ${money(result.cashAmount)} · POS ${money(result.cardAmount)}`
     if (payMethod !== 'Veresiye' && fiscal?.isEnabled && fiscal?.isPaired) msg += ' | Fiş basıldı'
+    const posted = posAccounts.find((row) => Number(row.id) === Number(posAccountId)) || (cardSale(payMethod, split) ? posAccounts[0] : null)
+    if (posted) msg += ` | ${posted.name}`
     setMessage(msg)
     const pack = await fetchShortcuts(session.token).catch(() => null)
     if (pack?.products) setProducts(pack.products)
@@ -1334,6 +1355,34 @@ export default function QuickSalePage() {
             <div className="flex gap-2">
               <button type="button" onClick={() => setMissingBarcode(null)} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300">Vazgeç</button>
               <button type="button" onClick={() => navigate(`/app/products?barkod=${encodeURIComponent(missingBarcode.barcode)}`)} className="flex-1 py-2.5 rounded-xl bg-emerald-600 font-black">Stok kartı aç</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {posAsk && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-sky-500/40 rounded-3xl p-5 space-y-3">
+            <div className="font-black text-lg text-white">POS hesabı</div>
+            <p className="text-xs text-slate-400">Kart tutarı hangi POS hesabına yazılsın?</p>
+            <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto">
+              {posAccounts.map((account, index) => (
+                <button
+                  key={account.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true)
+                    saveCompletedSale(posAsk.cartSnapshot, posAsk.payMethod, posAsk.split, posAsk.discountAmount, account.id)
+                      .catch((err) => setError(err.message))
+                      .finally(() => setBusy(false))
+                  }}
+                  className="flex items-center justify-between rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3 text-left"
+                >
+                  <span className="font-black text-white">{account.name}{index === 0 ? ' · Ana' : ''}</span>
+                  <span className="font-mono text-emerald-300">{money(account.balance)}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
