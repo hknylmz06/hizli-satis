@@ -347,6 +347,32 @@ html.light [class*="from-green-"],
 html.light [class*="from-green-"] * {
   color: #ffffff !important;
 }
+html.light .dept-pad {
+  background-color: #120f2e !important;
+  background-image: linear-gradient(to bottom, #0f0c29, #1a1040, #0d0b1e) !important;
+  color: #ffffff !important;
+}
+html.light .dept-pad .dept-caption {
+  color: #ddd6fe !important;
+}
+html.light .dept-pad .dept-amount,
+html.light .dept-pad .dept-amount.text-white {
+  color: #ffffff !important;
+}
+html.light .legacy-page .dept-pad button.dept-key {
+  background-color: #3730a3 !important;
+  color: #ffffff !important;
+  border-color: rgba(165, 180, 252, 0.45) !important;
+}
+html.light .legacy-page .dept-pad button.dept-danger {
+  background-color: #9f1239 !important;
+  color: #ffffff !important;
+  border-color: rgba(251, 113, 133, 0.45) !important;
+}
+html.light .legacy-page .dept-pad button.dept-chip,
+html.light .legacy-page .dept-pad button.dept-chip div {
+  color: #ffffff !important;
+}
 html.light .pos-tile {
   background-color: #ffffff !important;
   background-image: none !important;

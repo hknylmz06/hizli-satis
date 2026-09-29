@@ -1072,14 +1072,14 @@ export default function QuickSalePage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col gap-3 bg-gradient-to-b from-[#0f0c29] via-[#1a1040] to-[#0d0b1e] p-4 rounded-3xl border border-indigo-500/40 min-h-0">
+          <div className="dept-pad flex-1 flex flex-col gap-3 bg-gradient-to-b from-[#0f0c29] via-[#1a1040] to-[#0d0b1e] p-4 rounded-3xl border border-indigo-500/40 min-h-0">
             <div className="flex items-center justify-between border-2 border-indigo-400/40 rounded-2xl px-4 py-3 bg-indigo-950/40">
-              <span className="text-xs font-black text-indigo-300 uppercase tracking-widest">Departman Tutar Girişi</span>
-              <span className="text-4xl font-mono font-black text-white">{deptAmount ? `₺${deptAmount}` : '₺0'}</span>
+              <span className="dept-caption text-xs font-black text-indigo-200 uppercase tracking-widest">Departman Tutar Girişi</span>
+              <span className="dept-amount text-4xl font-mono font-black text-white">{deptAmount ? `₺${deptAmount}` : '₺0'}</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {departments.map((dept) => (
-                <button key={dept.id} type="button" onClick={() => addDepartment(dept)} style={{ backgroundColor: dept.color }} className="rounded-3xl p-4 min-h-[88px] text-left text-white font-black">
+                <button key={dept.id} type="button" onClick={() => addDepartment(dept)} style={{ backgroundColor: dept.color }} className="dept-chip rounded-3xl p-4 min-h-[88px] text-left text-white font-black">
                   <div className="text-xs">D{dept.slot} · %{dept.vat}</div>
                   <div className="text-sm mt-2">{dept.name}</div>
                 </button>
@@ -1092,7 +1092,7 @@ export default function QuickSalePage() {
                 ['1', '1'], ['2', '2'], ['3', '3'], ['00', '00'],
                 ['0', '0'], ['.', '.'], ['Z', 'SIFIRLA']
               ].map(([key, label]) => (
-                <button key={label + key} type="button" onClick={() => pressDeptKey(key === 'Z' ? 'C' : key)} className={`h-14 rounded-2xl font-black border border-indigo-400/30 ${key === '0' ? 'col-span-2 text-xl' : ''} ${'⌫CZ'.includes(key) ? 'bg-rose-800 text-sm' : 'bg-indigo-800 text-white text-xl'}`}>
+                <button key={label + key} type="button" onClick={() => pressDeptKey(key === 'Z' ? 'C' : key)} className={`h-14 rounded-2xl font-black border border-indigo-400/30 text-white ${key === '0' ? 'col-span-2 text-xl' : ''} ${'⌫CZ'.includes(key) ? 'dept-danger bg-rose-800 text-sm' : 'dept-key bg-indigo-800 text-xl'}`}>
                   {label}
                 </button>
               ))}
