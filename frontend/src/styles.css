@@ -149,6 +149,32 @@
   .legacy-page .support-page button.send-wa {
     @apply inline-flex items-center gap-2 bg-emerald-600 text-white font-bold px-4 py-2.5 text-sm;
   }
+  .legacy-page .fiscal-screen h1 { @apply text-lg font-black text-slate-900 mb-0; }
+  .legacy-page .fiscal-screen h2 { @apply text-sm font-black text-slate-800; }
+  .legacy-page .fiscal-screen label { @apply block text-xs font-semibold text-slate-500; }
+  .legacy-page .fiscal-screen input,
+  .legacy-page .fiscal-screen select {
+    @apply w-full mt-1 bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900;
+  }
+  .legacy-page .fiscal-screen button {
+    @apply bg-white border border-slate-300 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold;
+  }
+  .legacy-page .fiscal-screen button.pair {
+    @apply bg-violet-600 border-violet-600 text-white;
+  }
+  .legacy-page .fiscal-screen button.save {
+    @apply bg-slate-900 border-slate-900 text-white;
+  }
+  .legacy-page .fiscal-screen button.icon {
+    @apply bg-transparent border-0 px-2 py-1;
+  }
+  .legacy-page .fiscal-screen button.toggle {
+    @apply relative w-14 h-8 rounded-full border-0 p-0;
+  }
+  .legacy-page .fiscal-screen table { @apply w-full text-sm; }
+  .legacy-page .fiscal-screen th,
+  .legacy-page .fiscal-screen td { @apply text-left py-2 px-3 border-b border-slate-200 text-slate-800; }
+
   .legacy-page .support-page a.dl {
     @apply inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500;
   }
