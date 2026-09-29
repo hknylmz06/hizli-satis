@@ -235,8 +235,10 @@ public class FiscalController(TenantDbContextFactory tenantDbFactory) : Controll
             if (mine is not null) return mine;
         }
 
-        var all = await db.FiscalRegisters.AsNoTracking().Where(x => x.IsEnabled).ToListAsync(ct);
-        return all.Count == 1 ? all[0] : null;
+        var shared = await db.FiscalRegisters.AsNoTracking()
+            .Where(x => x.IsEnabled && x.UserId == null)
+            .ToListAsync(ct);
+        return shared.Count == 1 ? shared[0] : null;
     }
 
     private static async Task ClearUserAsync(TenantDbContext db, int userId, int? keepId, CancellationToken ct)

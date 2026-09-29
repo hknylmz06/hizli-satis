@@ -840,6 +840,9 @@ export default function QuickSalePage() {
           <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
+        {fiscal?.needsAssignment && (
+          <p className="mb-2 text-[11px] font-bold text-amber-200">Bu kullanıcıya yazarkasa tanımlı değil. Fiş yalnız kendi kasası olan kasiyerden basılır.</p>
+        )}
 
         <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-2">
           {slots.map((slot, idx) => {
