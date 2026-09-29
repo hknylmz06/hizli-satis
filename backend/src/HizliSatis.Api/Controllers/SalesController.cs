@@ -35,7 +35,10 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var productIds = request.Items.Where(i => i.ProductId is int).Select(i => i.ProductId!.Value).Distinct().ToList();
-        var products = await db.Products.Where(p => productIds.Contains(p.Id) && p.IsActive).ToListAsync(ct);
+        var products = await db.Products.AsNoTracking()
+            .Where(p => productIds.Contains(p.Id) && p.IsActive)
+            .Select(p => new SaleProduct(p.Id, p.Name, p.Barcode, p.SalePrice, p.PurchasePrice, p.VatRate, p.StockQuantity, p.CreatedAt))
+            .ToListAsync(ct);
         if (products.Count != productIds.Count)
             return BadRequest(new { message = "Bazı ürünler bulunamadı." });
 
@@ -56,7 +59,16 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
         };
 
         decimal subTotal = 0, vatTotal = 0, costTotal = 0;
-        var variants = await db.ProductVariants.Where(v => productIds.Contains(v.ProductId)).ToListAsync(ct);
+        var stockCuts = new Dictionary<int, decimal>();
+        var variants = productIds.Count == 0
+            ? new List<ProductVariant>()
+            : await db.ProductVariants.Where(v => productIds.Contains(v.ProductId)).ToListAsync(ct);
+        var batches = productIds.Count == 0
+            ? new List<StockBatch>()
+            : await db.StockBatches
+                .Where(b => productIds.Contains(b.ProductId) && b.RemainingQuantity > 0)
+                .OrderBy(b => b.PurchasedAt).ThenBy(b => b.Id)
+                .ToListAsync(ct);
 
         foreach (var line in request.Items)
         {
@@ -130,11 +142,12 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             };
             sale.Items.Add(saleItem);
             var onHand = variant?.StockQuantity ?? product.StockQuantity;
-            var lineCost = await FifoStock.ConsumeAsync(db, saleItem, product, variant?.Id, onHand, ct);
+            var lineCost = await FifoStock.ConsumeAsync(
+                db, saleItem, product.Id, product.PurchasePrice, product.CreatedAt, variant?.Id, onHand, ct, batches);
 
             if (variant is not null)
                 variant.StockQuantity -= line.Quantity;
-            product.StockQuantity -= line.Quantity;
+            stockCuts[product.Id] = stockCuts.GetValueOrDefault(product.Id) + line.Quantity;
             subTotal += lineNet;
             vatTotal += lineVat;
             costTotal += lineCost;
@@ -192,6 +205,12 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             sale.PosAccountId = posAccount.Id;
         }
         sale.AccountsPosted = sale.CashAmount > 0 || sale.CardAmount > 0;
+
+        foreach (var (productId, qty) in stockCuts)
+        {
+            await db.Products.Where(p => p.Id == productId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, p => p.StockQuantity - qty), ct);
+        }
 
         db.Sales.Add(sale);
         await db.SaveChangesAsync(ct);
@@ -292,6 +311,8 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
             .ToListAsync(ct);
         return Ok(items);
     }
+
+    private sealed record SaleProduct(int Id, string Name, string? Barcode, decimal SalePrice, decimal PurchasePrice, decimal VatRate, decimal StockQuantity, DateTime CreatedAt);
 
     private static async Task<(CashAccount? Cash, CashAccount? Pos)> RegistersAsync(Infrastructure.Persistence.TenantDbContext db, CancellationToken ct)
     {

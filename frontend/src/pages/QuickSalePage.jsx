@@ -74,6 +74,7 @@ export default function QuickSalePage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [fiscal, setFiscal] = useState(null)
+  const [autoFiscalReceipt, setAutoFiscalReceipt] = useState(true)
   const [askPosAccount, setAskPosAccount] = useState(false)
   const [posAccounts, setPosAccounts] = useState([])
   const [posAsk, setPosAsk] = useState(null)
@@ -157,7 +158,10 @@ export default function QuickSalePage() {
     }).catch(() => {})
     api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
     api('/api/fiscal/settings', { token: session.token }).then(setFiscal).catch(() => setFiscal(null))
-    api('/api/settings/extra', { token: session.token }).then((data) => setAskPosAccount(data.askPosAccount === true)).catch(() => setAskPosAccount(false))
+    api('/api/settings/extra', { token: session.token }).then((data) => {
+      setAskPosAccount(data.askPosAccount === true)
+      setAutoFiscalReceipt(data.autoFiscalReceipt !== false)
+    }).catch(() => setAskPosAccount(false))
     api('/api/accounts', { token: session.token }).then((rows) => {
       const list = (Array.isArray(rows) ? rows : []).filter((row) => row.type === 'pos')
       list.sort((a, b) => Number(a.id) - Number(b.id))
@@ -573,6 +577,7 @@ export default function QuickSalePage() {
   }
 
   function fiscalReady(device = fiscal) {
+    if (!autoFiscalReceipt) return false
     if (!device?.isEnabled || !device?.isPaired) return false
     if ((device.connectionType || 'IP') === 'COM') return !!device.comPort
     return !!device.deviceHost
@@ -726,9 +731,25 @@ export default function QuickSalePage() {
     const posted = posAccounts.find((row) => Number(row.id) === Number(posAccountId)) || (cardSale(payMethod, split) ? posAccounts[0] : null)
     if (posted) msg += ` | ${posted.name}`
     setMessage(msg)
-    const pack = await fetchShortcuts(session.token).catch(() => null)
-    if (pack?.products) setProducts(pack.products)
+    applySoldStock(cartSnapshot)
     inputRef.current?.focus()
+  }
+
+  function applySoldStock(lines) {
+    setProducts((prev) => prev.map((product) => {
+      const hits = lines.filter((item) => !item.isDepartment && Number(item.productId) === Number(product.id))
+      if (!hits.length) return product
+      const qty = hits.reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+      const variants = Array.isArray(product.variants)
+        ? product.variants.map((variant) => {
+          const used = hits
+            .filter((item) => Number(item.variantId) === Number(variant.id))
+            .reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+          return used ? { ...variant, stockQuantity: Number(variant.stockQuantity || 0) - used } : variant
+        })
+        : product.variants
+      return { ...product, stockQuantity: Number(product.stockQuantity || 0) - qty, variants }
+    }))
   }
 
   async function resumePaper() {
@@ -888,7 +909,7 @@ export default function QuickSalePage() {
   const splitCashValue = moneyInput(splitCash)
   const splitCardValue = Math.max(0, Math.round((total - splitCashValue) * 100) / 100)
 
-  const priceLook = fiscal?.isEnabled && !fiscal?.isPaired
+  const priceLook = autoFiscalReceipt && fiscal?.isEnabled && !fiscal?.isPaired
 
   return (
     <div className="h-screen p-3 flex gap-3 overflow-x-auto overflow-y-hidden bg-[#070b16] text-slate-100">
