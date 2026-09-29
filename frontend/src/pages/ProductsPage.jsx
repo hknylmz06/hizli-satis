@@ -141,6 +141,7 @@ export default function ProductsPage() {
     setLookup('')
     setShowModal(true)
     setParams({}, { replace: true })
+    lookupBarcode(code)
   }, [params])
 
   async function run(action) {
@@ -158,9 +159,10 @@ export default function ProductsPage() {
     setLookup('')
   }
 
-  async function lookupBarcode() {
-    const code = form.barcode.trim()
-    if (!code || code.length < 3 || editingId) return
+  async function lookupBarcode(raw) {
+    const code = String(raw ?? form.barcode).trim()
+    if (!code || code.length < 3) return
+    if (raw === undefined && editingId) return
     try {
       const found = await api(`/api/products/by-barcode/${encodeURIComponent(code)}`, { token: session.token })
       setForm((prev) => ({
