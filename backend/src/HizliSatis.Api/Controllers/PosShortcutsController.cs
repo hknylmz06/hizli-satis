@@ -1,3 +1,4 @@
+using HizliSatis.Infrastructure.Persistence;
 using HizliSatis.Infrastructure.Services;
 using HizliSatis.Infrastructure.Tenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +10,7 @@ namespace HizliSatis.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "TenantUser")]
 [Route("api/pos/shortcuts")]
-public class PosShortcutsController(TenantDbContextFactory tenantDbFactory) : ControllerBase
+public class PosShortcutsController(TenantDbContextFactory tenantDbFactory, MasterDbContext master) : ControllerBase
 {
     public record SaveRequest(List<int>? ProductIds);
 
@@ -41,8 +42,35 @@ public class PosShortcutsController(TenantDbContextFactory tenantDbFactory) : Co
                     .ToList()
             })
             .ToListAsync(ct);
-        var products = ids.Select(id => rows.FirstOrDefault(p => p.Id == id)).Where(p => p is not null).ToList();
-        return Ok(new { ids = products.Select(p => p!.Id), products });
+        var ordered = ids.Select(id => rows.FirstOrDefault(p => p.Id == id)).Where(p => p is not null).ToList();
+        var codes = ordered
+            .Where(p => string.IsNullOrWhiteSpace(p!.Image) && !string.IsNullOrWhiteSpace(p.Barcode))
+            .Select(p => p!.Barcode!)
+            .Distinct()
+            .ToList();
+        var sharedRows = codes.Count == 0
+            ? []
+            : await master.CatalogProducts.AsNoTracking()
+                .Where(c => codes.Contains(c.Barcode) && c.Image != null)
+                .Select(c => new { c.Barcode, c.Image })
+                .ToListAsync(ct);
+        var shared = sharedRows
+            .Where(c => !string.IsNullOrWhiteSpace(c.Image))
+            .GroupBy(c => c.Barcode)
+            .ToDictionary(g => g.Key, g => g.First().Image!);
+        var products = ordered.Select(p => new
+        {
+            p!.Id,
+            p.Name,
+            p.Barcode,
+            p.SalePrice,
+            p.VatRate,
+            p.StockQuantity,
+            p.Unit,
+            Image = string.IsNullOrWhiteSpace(p.Image) && p.Barcode is not null && shared.TryGetValue(p.Barcode, out var photo) ? photo : p.Image,
+            p.Variants
+        });
+        return Ok(new { ids = ordered.Select(p => p!.Id), products });
     }
 
     [HttpPut]

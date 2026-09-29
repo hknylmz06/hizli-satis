@@ -203,6 +203,7 @@ public class ProductsController(
             return BadRequest(new { message = "Resim çok büyük." });
         product.Image = image;
         await db.SaveChangesAsync(ct);
+        await RememberInCatalogAsync(db, product, ct);
         return Ok(new { product.Id, product.Image });
     }
 
@@ -325,6 +326,7 @@ public class ProductsController(
                     SalePrice = product.SalePrice,
                     IsDomestic = product.IsDomestic ?? true,
                     OriginCountry = string.IsNullOrWhiteSpace(product.OriginCountry) ? "TR" : product.OriginCountry.Trim(),
+                    Image = product.Image,
                     UpdatedAt = DateTime.UtcNow
                 });
             }
@@ -339,6 +341,8 @@ public class ProductsController(
                 existing.IsDomestic = product.IsDomestic ?? existing.IsDomestic;
                 if (!string.IsNullOrWhiteSpace(product.OriginCountry))
                     existing.OriginCountry = product.OriginCountry.Trim();
+                if (!string.IsNullOrWhiteSpace(product.Image))
+                    existing.Image = product.Image;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
 
