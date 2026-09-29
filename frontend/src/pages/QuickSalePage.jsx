@@ -1340,19 +1340,41 @@ export default function QuickSalePage() {
       )}
 
       {variantAsk && (() => {
-        const defined = variantAsk.variants || []
-        const onHand = defined.filter((row) => Number(row.stockQuantity) > 0)
-        const rows = onHand.length ? onHand : defined
-        const sizes = [...new Set(rows.map((row) => row.sizeName).filter(Boolean))]
+        const rows = variantAsk.variants || []
         const colors = [...new Set(rows.filter((row) => !variantSize || row.sizeName === variantSize).map((row) => row.colorName).filter(Boolean))]
-        const match = rows.find((row) => (row.sizeName || '') === (variantSize || '') && (row.colorName || '') === (variantColor || ''))
-          || rows.find((row) => (!sizes.length || row.sizeName === variantSize) && (!colors.length || row.colorName === variantColor))
-        const ready = (!sizes.length || variantSize) && (!colors.length || variantColor) && match
+        const sizes = [...new Set(rows.filter((row) => !variantColor || row.colorName === variantColor).map((row) => row.sizeName).filter(Boolean))]
+        const match = rows.find((row) => (!colors.length || row.colorName === variantColor) && (!sizes.length || row.sizeName === variantSize))
+        const ready = (!colors.length || variantColor) && (!sizes.length || variantSize) && match
+        function pickColor(color) {
+          const next = variantColor === color ? '' : color
+          setVariantColor(next)
+          if (next && variantSize && !rows.some((row) => row.colorName === next && row.sizeName === variantSize)) setVariantSize('')
+        }
+        function pickSize(size) {
+          const next = variantSize === size ? '' : size
+          setVariantSize(next)
+          if (next && variantColor && !rows.some((row) => row.sizeName === next && row.colorName === variantColor)) setVariantColor('')
+        }
         return (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="w-full max-w-md bg-slate-900 border border-purple-500/40 rounded-3xl p-5 space-y-3">
               <div className="font-black text-lg text-white">{variantAsk.name}</div>
-              <p className="text-xs text-slate-400">{onHand.length ? 'Eldeki beden ve renk. Beden seçince o bedenin renkleri gelir.' : 'Elde stok yok. Tanımlı beden ve renkler duruyor.'}</p>
+              <p className="text-xs text-slate-400">Kayıtlı renk ve bedenler. Renge basınca o rengin bedenleri, bedene basınca o bedenin renkleri gelir.</p>
+              {colors.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-bold text-slate-300 mb-1.5">Renk</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {colors.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => pickColor(color)}
+                        className={`px-3 py-2 rounded-xl text-sm font-black border ${variantColor === color ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-800 border-slate-600 text-slate-100'}`}
+                      >{color}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {sizes.length > 0 && (
                 <div>
                   <div className="text-[11px] font-bold text-slate-300 mb-1.5">Beden</div>
@@ -1361,38 +1383,16 @@ export default function QuickSalePage() {
                       <button
                         key={size}
                         type="button"
-                        onClick={() => {
-                          setVariantSize(size)
-                          const nextColors = rows.filter((row) => row.sizeName === size).map((row) => row.colorName).filter(Boolean)
-                          if (!nextColors.includes(variantColor)) setVariantColor('')
-                        }}
+                        onClick={() => pickSize(size)}
                         className={`px-3 py-2 rounded-xl text-sm font-black border ${variantSize === size ? 'bg-purple-600 border-purple-400 text-white' : 'bg-slate-800 border-slate-600 text-slate-100'}`}
                       >{size}</button>
                     ))}
                   </div>
                 </div>
               )}
-              {colors.length > 0 && (
-                <div>
-                  <div className="text-[11px] font-bold text-slate-300 mb-1.5">Renk{variantSize ? ` · ${variantSize}` : ''}</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {colors.map((color) => {
-                      const row = rows.find((item) => item.colorName === color && (!variantSize || item.sizeName === variantSize))
-                      return (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setVariantColor(color)}
-                          className={`px-3 py-2 rounded-xl text-sm font-black border ${variantColor === color ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-800 border-slate-600 text-slate-100'}`}
-                        >{color}{row ? ` · ${formatQty(row.stockQuantity)}` : ''}</button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
               {ready && (
                 <div className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white flex justify-between">
-                  <span>{[match.sizeName, match.colorName].filter(Boolean).join(' · ')}</span>
+                  <span>{[match.colorName, match.sizeName].filter(Boolean).join(' · ')}</span>
                   <span className="font-mono text-emerald-300">{formatQty(match.stockQuantity)} {variantAsk.unit || 'adet'}</span>
                 </div>
               )}
