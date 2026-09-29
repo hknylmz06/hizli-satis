@@ -8,8 +8,7 @@ import QuickSalePage from './pages/QuickSalePage'
 import ProductsPage from './pages/ProductsPage'
 import CustomersPage from './pages/CustomersPage'
 import ReportsPage from './pages/ReportsPage'
-import FiscalPairingPage from './pages/FiscalPairingPage'
-import OtherSettingsPage from './pages/OtherSettingsPage'
+import SettingsPage from './pages/SettingsPage'
 import SupportPage from './pages/SupportPage'
 import PurchaseInvoicesPage from './pages/PurchaseInvoicesPage'
 import ExpensesPage from './pages/ExpensesPage'
@@ -58,8 +57,7 @@ export default function App() {
         <Route path="products" element={<Guard perm="can_access_definitions"><ProductsPage /></Guard>} />
         <Route path="customers" element={<Guard perm="can_access_definitions"><CustomersPage /></Guard>} />
         <Route path="reports" element={<Guard perm="can_access_reports"><ReportsPage /></Guard>} />
-        <Route path="fiscal" element={<Guard perm="can_access_settings"><FiscalPairingPage /></Guard>} />
-        <Route path="settings" element={<Guard perm="can_access_settings"><OtherSettingsPage /></Guard>} />
+        <Route path="fiscal" element={<Guard perm="can_access_settings"><SettingsPage /></Guard>} />
         <Route path="users" element={<Guard perm="can_manage_users"><UsersPage /></Guard>} />
         <Route path="suppliers" element={<Guard perm="can_access_definitions"><SuppliersPage /></Guard>} />
         <Route path="invoices" element={<Guard perm="can_access_invoices"><PurchaseInvoicesPage /></Guard>} />
