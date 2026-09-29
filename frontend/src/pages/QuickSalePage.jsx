@@ -840,6 +840,9 @@ export default function QuickSalePage() {
           <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
+        {fiscal?.needsAssignment && (
+          <p className="mb-2 text-[11px] font-bold text-amber-200">Bu kullanıcıya yazarkasa tanımlı değil. Fiş yalnız kendi kasası olan kasiyerden basılır.</p>
+        )}
 
         <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-2">
           {slots.map((slot, idx) => {
@@ -974,31 +977,36 @@ export default function QuickSalePage() {
                 const image = productImage(product)
                 return (
                   <div key={product.id} className="pos-tile rounded-2xl border border-slate-700 bg-slate-900 min-h-[176px] overflow-hidden flex flex-col">
-                    <button type="button" onClick={() => chooseProduct(product)} className="text-left flex flex-col flex-1">
+                    <div onClick={() => chooseProduct(product)} className={`pos-photo relative cursor-pointer ${image ? 'h-28 bg-slate-800' : 'h-16 px-2.5 flex items-center justify-between border-b border-slate-700 bg-slate-800'}`}>
                       {image ? (
-                        <div className="pos-photo h-28 bg-slate-800 relative">
-                          <img
-                            src={image}
-                            alt=""
-                            className="w-full h-full object-cover"
-                            onError={(e) => { e.currentTarget.style.display = 'none' }}
-                          />
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-300 absolute top-1.5 right-1.5 drop-shadow" />
-                        </div>
+                        <img
+                          src={image}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none' }}
+                        />
                       ) : (
-                        <div className="pos-photo h-16 px-2.5 flex items-center justify-between border-b border-slate-700 bg-slate-800">
-                          <Package className="w-5 h-5 text-slate-400" />
-                          <span
-                            role="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              const url = window.prompt('Resim adresi', '')
-                              if (url) saveImage(product.id, url)
-                            }}
-                            className="pos-add text-[11px] text-emerald-300 font-bold"
-                          >+ Resim Ekle</span>
-                        </div>
+                        <Package className="w-5 h-5 text-slate-400" />
                       )}
+                      <label onClick={(e) => e.stopPropagation()} className={`pos-add cursor-pointer text-[11px] text-emerald-300 font-bold ${image ? 'absolute bottom-1.5 right-1.5 bg-slate-950/80 rounded-lg px-1.5 py-0.5' : ''}`}>
+                        {image ? 'Değiştir' : '+ Dosyadan seç'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            e.target.value = ''
+                            if (!file) return
+                            const reader = new FileReader()
+                            reader.onload = () => saveImage(product.id, String(reader.result || ''))
+                            reader.readAsDataURL(file)
+                          }}
+                        />
+                      </label>
+                      {image && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-300 absolute top-1.5 right-1.5 drop-shadow" />}
+                    </div>
+                    <button type="button" onClick={() => chooseProduct(product)} className="text-left flex flex-col flex-1">
                       <div className="p-2.5 flex-1 flex flex-col justify-between gap-2">
                         <h4 className="pos-name font-black text-white text-[13px] leading-snug line-clamp-2">{product.name}</h4>
                         <div className="pt-1.5 border-t border-slate-700 flex justify-between items-end">
@@ -1213,7 +1221,7 @@ export default function QuickSalePage() {
                   <input value={shortcutForm.stockQuantity} onChange={(e) => setShortcutForm({ ...shortcutForm, stockQuantity: e.target.value })} placeholder="Stok" className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm" />
                 </div>
                 <label className="block text-[11px] text-slate-400">
-                  Resim
+                  Dosyadan resim seç
                   <input type="file" accept="image/*" className="mt-1 block w-full text-xs" onChange={(e) => {
                     const file = e.target.files?.[0]
                     if (!file) return
