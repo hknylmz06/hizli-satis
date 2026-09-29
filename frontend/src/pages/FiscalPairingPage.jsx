@@ -81,6 +81,7 @@ export default function FiscalPairingPage() {
       const rows = data.devices || []
       setDevices(rows)
       setUsers(data.users || [])
+      if (data.message) setError(data.message)
       if (selectId) {
         const picked = rows.find((row) => row.id === selectId)
         if (picked) fill(picked)

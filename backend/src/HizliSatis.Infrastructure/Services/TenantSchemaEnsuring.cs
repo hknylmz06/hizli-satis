@@ -50,8 +50,8 @@ public static class TenantSchemaEnsuring
                     [IsEnabled] bit NOT NULL,
                     [IsPaired] bit NOT NULL,
                     [LastStatus] nvarchar(500) NULL,
-                    [LastPairedAt] datetimeoffset NULL,
-                    [UpdatedAt] datetimeoffset NOT NULL,
+                    [LastPairedAt] datetime2 NULL,
+                    [UpdatedAt] datetime2 NOT NULL,
                     CONSTRAINT [PK_FiscalDevices] PRIMARY KEY ([Id])
                 );
             END
@@ -75,10 +75,19 @@ public static class TenantSchemaEnsuring
                     [IsEnabled] bit NOT NULL,
                     [IsPaired] bit NOT NULL,
                     [LastStatus] nvarchar(500) NULL,
-                    [LastPairedAt] datetimeoffset NULL,
-                    [UpdatedAt] datetimeoffset NOT NULL,
+                    [LastPairedAt] datetime2 NULL,
+                    [UpdatedAt] datetime2 NOT NULL,
                     CONSTRAINT [PK_FiscalRegisters] PRIMARY KEY ([Id])
                 );
+            END
+            IF EXISTS (
+                SELECT 1 FROM sys.columns c
+                JOIN sys.types t ON c.user_type_id = t.user_type_id
+                WHERE c.object_id = OBJECT_ID(N'FiscalRegisters')
+                  AND c.name = N'UpdatedAt' AND t.name = N'datetimeoffset')
+            BEGIN
+                ALTER TABLE [FiscalRegisters] ALTER COLUMN [LastPairedAt] datetime2 NULL;
+                ALTER TABLE [FiscalRegisters] ALTER COLUMN [UpdatedAt] datetime2 NOT NULL;
             END
             IF OBJECT_ID(N'FiscalRegisters', N'U') IS NOT NULL
                AND OBJECT_ID(N'FiscalDevices', N'U') IS NOT NULL
