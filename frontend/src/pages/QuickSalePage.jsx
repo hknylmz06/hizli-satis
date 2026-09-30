@@ -76,6 +76,13 @@ export default function QuickSalePage() {
   const [fiscal, setFiscal] = useState(null)
   const [autoFiscalReceipt, setAutoFiscalReceipt] = useState(true)
   const [askPosAccount, setAskPosAccount] = useState(false)
+  const [showInfoReceipt, setShowInfoReceipt] = useState(false)
+  const [autoPrintInfo, setAutoPrintInfo] = useState(false)
+  const [infoPrinterName, setInfoPrinterName] = useState('')
+  const [infoPaper, setInfoPaper] = useState('80')
+  const [infoSlip, setInfoSlip] = useState(null)
+  const [infoPrinting, setInfoPrinting] = useState(false)
+  const [infoPrintError, setInfoPrintError] = useState('')
   const [posAccounts, setPosAccounts] = useState([])
   const [posAsk, setPosAsk] = useState(null)
   const [fiscalWait, setFiscalWait] = useState('')
@@ -168,6 +175,10 @@ export default function QuickSalePage() {
     api('/api/settings/extra', { token: session.token }).then((data) => {
       setAskPosAccount(data.askPosAccount === true)
       setAutoFiscalReceipt(data.autoFiscalReceipt !== false)
+      setShowInfoReceipt(data.showInfoReceipt === true)
+      setAutoPrintInfo(data.autoPrintInfoReceipt === true)
+      setInfoPrinterName(data.infoPrinterName || '')
+      setInfoPaper(data.infoPaper === '58' || data.infoPaper === 'a4' ? data.infoPaper : '80')
     }).catch(() => setAskPosAccount(false))
     api('/api/accounts', { token: session.token }).then((rows) => {
       const list = (Array.isArray(rows) ? rows : []).filter((row) => row.type === 'pos')
@@ -756,7 +767,60 @@ export default function QuickSalePage() {
     if (posted) msg += ` | ${posted.name}`
     setMessage(msg)
     applySoldStock(cartSnapshot)
+    const slip = {
+      receiptNo: result.receiptNo,
+      when: new Date().toLocaleString('tr-TR'),
+      payment: payMethod === 'KrediKarti' ? 'Kredi kartı' : payMethod === 'Parcali' ? 'Parçalı' : payMethod === 'Veresiye' ? 'Veresiye' : 'Nakit',
+      grandTotal: result.grandTotal,
+      cashAmount: result.cashAmount,
+      cardAmount: result.cardAmount,
+      lines: (Array.isArray(result.items) ? result.items : []).map((item) => ({
+        name: item.productName,
+        qty: String(item.quantity),
+        total: Number(item.lineTotal).toFixed(2)
+      }))
+    }
+    if (showInfoReceipt) {
+      setInfoSlip(slip)
+      setInfoPrintError('')
+    }
+    if (autoPrintInfo) sendInfoReceipt(slip)
     inputRef.current?.focus()
+  }
+
+  async function sendInfoReceipt(slip) {
+    const agentBase = (fiscal?.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
+    setInfoPrinting(true)
+    setInfoPrintError('')
+    try {
+      const res = await fetch(`${agentBase}/receipt/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: infoPrinterName || '',
+          paper: infoPaper || '80',
+          receiptNo: slip.receiptNo,
+          when: slip.when,
+          payment: slip.payment,
+          grandTotal: Number(slip.grandTotal) || 0,
+          cashAmount: Number(slip.cashAmount) || 0,
+          cardAmount: Number(slip.cardAmount) || 0,
+          lines: slip.lines
+        })
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.message || (res.status === 404
+          ? 'Sessiz baskı için kasadaki yazıcı servisini güncelle. Sistem ayarlarından kurulum dosyasını bir kez daha indir.'
+          : 'Fiş yazıcıya gidemedi. Kasada yazıcı servisi açık olsun.'))
+      }
+    } catch (err) {
+      const text = err.message || 'Fiş yazıcıya gidemedi.'
+      setInfoPrintError(text)
+      if (!showInfoReceipt) setError(text)
+    } finally {
+      setInfoPrinting(false)
+    }
   }
 
   function applySoldStock(lines) {
@@ -1615,6 +1679,39 @@ export default function QuickSalePage() {
                 <div className="font-bold text-sm mt-2">{okcBusy === 'cancel' ? 'Gönderiliyor...' : 'Fiş İptal Et'}</div>
                 <div className="text-[11px] text-slate-400">Askıdaki açık fişi temizler</div>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {infoSlip && (
+        <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white text-slate-900 rounded-3xl p-5 space-y-3 shadow-2xl">
+            <div className="text-center">
+              <div className="text-lg font-black">Bilgi Fişi</div>
+              <div className="text-xs text-slate-500">{infoSlip.when}</div>
+              <div className="text-xs font-mono text-slate-500">{infoSlip.receiptNo}</div>
+            </div>
+            <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
+              {infoSlip.lines.map((line, index) => (
+                <div key={`${line.name}-${index}`} className="flex justify-between gap-3 text-sm">
+                  <span>{line.qty} x {line.name}</span>
+                  <span className="font-mono shrink-0">{line.total} TL</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-slate-200 pt-2 flex justify-between font-black">
+              <span>{infoSlip.payment}</span>
+              <span>{Number(infoSlip.grandTotal).toFixed(2)} TL</span>
+            </div>
+            {infoSlip.payment === 'Parçalı' && (
+              <div className="text-xs text-slate-500">Nakit {Number(infoSlip.cashAmount).toFixed(2)} · Kart {Number(infoSlip.cardAmount).toFixed(2)}</div>
+            )}
+            <p className="text-[11px] text-center text-slate-400">Mali değeri yoktur. Yazdırma penceresi açılmaz.</p>
+            {infoPrintError && <p className="text-sm text-rose-600">{infoPrintError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setInfoSlip(null)} className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-700 font-bold">Kapat</button>
+              <button type="button" disabled={infoPrinting} onClick={() => sendInfoReceipt(infoSlip)} className="primary flex-1 py-3 rounded-xl font-black disabled:opacity-50">{infoPrinting ? 'Basılıyor...' : 'Yazdır'}</button>
             </div>
           </div>
         </div>
