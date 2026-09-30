@@ -793,6 +793,9 @@ export default function QuickSalePage() {
     setInfoPrinting(true)
     setInfoPrintError('')
     try {
+      const health = await fetch(`${agentBase}/health`, { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).catch(() => null)
+      if (!health) throw new Error('Yazıcı servisi kapalı. Sistem ayarlarından Ajanı indir, zip’i aç, Kur dosyasına bas.')
+      if (!health.receipt) throw new Error('Kasada eski yazıcı servisi açık. Ajanı indir, zip’i aç, Kur’a bas. Kur eski ajanı kapatıp yenisini açar.')
       const res = await fetch(`${agentBase}/receipt/print`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
