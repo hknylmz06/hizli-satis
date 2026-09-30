@@ -391,3 +391,30 @@ html.light .pos-tile .pos-price,
 html.light .pos-tile .pos-add {
   color: #047857 !important;
 }
+html.light .pos-alert {
+  background-color: #450a0a !important;
+  color: #fee2e2 !important;
+}
+html.light .pos-alert span,
+html.light .pos-alert svg,
+html.light .legacy-page .pos-alert button {
+  color: #fee2e2 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+html.light .pos-alert.is-warn {
+  background-color: #451a03 !important;
+  color: #fef3c7 !important;
+}
+html.light .pos-alert.is-warn span,
+html.light .pos-alert.is-warn svg {
+  color: #fef3c7 !important;
+}
+html.light .pos-alert.is-ok {
+  background-color: #022c22 !important;
+  color: #d1fae5 !important;
+}
+html.light .pos-alert.is-ok span,
+html.light .pos-alert.is-ok svg {
+  color: #d1fae5 !important;
+}

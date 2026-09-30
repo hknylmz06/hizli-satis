@@ -969,7 +969,7 @@ export default function QuickSalePage() {
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
         {priceLook && (
-          <div className={`mb-2 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
+          <div className={`pos-alert mb-2 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'is-warn bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
             <AlertCircle className="w-4 h-4 shrink-0" />
             {fiscal?.needsAssignment
               ? 'FİYAT GÖR MODU. Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
@@ -1000,13 +1000,13 @@ export default function QuickSalePage() {
         </div>
 
         {error && (
-          <div className="mb-2 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
+          <div className="pos-alert mb-2 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
             <span className="flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{error}</span>
             <button type="button" onClick={() => setError('')}><X className="w-3.5 h-3.5" /></button>
           </div>
         )}
         {message && (
-          <div className="mb-2 p-2 bg-emerald-950 border border-emerald-500/50 rounded-2xl text-emerald-100 text-[11px] flex items-center gap-1.5">
+          <div className="pos-alert is-ok mb-2 p-2 bg-emerald-950 border border-emerald-500/50 rounded-2xl text-emerald-100 text-[11px] flex items-center gap-1.5">
             <CheckCircle className="w-3.5 h-3.5 shrink-0" />{message}
           </div>
         )}
