@@ -17,14 +17,15 @@ public static class InfoReceiptPrinter
             throw new InvalidOperationException("Sessiz fiş basımı yalnız kasa bilgisayarında çalışır.");
 
         var paper = (request.Paper ?? "80").Trim().ToLowerInvariant();
+        // 80 mm yazıcıda taşmayı kesmek için baskı genişliği 78 mm.
         var width = paper switch
         {
-            "58" => 228,
+            "58" => 220,
             "a4" => 827,
-            _ => 315
+            _ => 307
         };
         var lines = request.Lines?.Count ?? 0;
-        var height = paper == "a4" ? 1169 : Math.Clamp(240 + lines * 36, 420, 2200);
+        var height = paper == "a4" ? 1169 : Math.Clamp(220 + lines * 32, 400, 2200);
 
         using var doc = new PrintDocument();
         var name = (request.PrinterName ?? "").Trim();
@@ -36,7 +37,7 @@ public static class InfoReceiptPrinter
         }
 
         doc.PrintController = new StandardPrintController();
-        doc.DefaultPageSettings.Margins = new Margins(8, 8, 8, 8);
+        doc.DefaultPageSettings.Margins = new Margins(paper == "a4" ? 40 : 6, paper == "a4" ? 40 : 6, 6, 6);
         doc.DefaultPageSettings.PaperSize = new PaperSize("BilgiFisi", width, height);
         doc.PrintPage += (_, e) => Draw(e, request, paper);
         doc.Print();
@@ -45,36 +46,61 @@ public static class InfoReceiptPrinter
     private static void Draw(PrintPageEventArgs e, InfoReceiptRequest request, string paper)
     {
         var g = e.Graphics ?? throw new InvalidOperationException("Yazıcı yüzeyi açılamadı.");
-        var size = paper == "58" ? 8f : paper == "a4" ? 11f : 9f;
-        using var font = new Font("Arial", size);
-        using var bold = new Font("Arial", size + 1.5f, FontStyle.Bold);
-        var left = e.MarginBounds.Width > 20 ? e.MarginBounds.Left : 6;
-        var width = e.MarginBounds.Width > 20 ? e.MarginBounds.Width : Math.Max(40, e.PageBounds.Width - 12);
-        float y = e.MarginBounds.Width > 20 ? e.MarginBounds.Top : 6;
+        g.PageUnit = GraphicsUnit.Millimeter;
+        var pageWidth = paper switch
+        {
+            "58" => 54f,
+            "a4" => 190f,
+            _ => 78f
+        };
+        var left = paper == "a4" ? 8f : 1.2f;
+        var width = pageWidth - (left * 2f);
+        float y = 1.5f;
+        var size = paper == "58" ? 7.5f : paper == "a4" ? 11f : 8.5f;
+        using var font = new Font("Arial", size, FontStyle.Regular, GraphicsUnit.Point);
+        using var bold = new Font("Arial", size + 1f, FontStyle.Bold, GraphicsUnit.Point);
 
         void Line(string text, Font face, StringAlignment align = StringAlignment.Near)
         {
-            var height = face.GetHeight(g) + 1;
-            var rect = new RectangleF(left, y, width, height + 2);
-            using var format = new StringFormat { Alignment = align, Trimming = StringTrimming.EllipsisCharacter };
+            var height = face.GetHeight(g) + 0.3f;
+            var rect = new RectangleF(left, y, width, height + 0.4f);
+            using var format = new StringFormat { Alignment = align, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
             g.DrawString(text, face, Brushes.Black, rect, format);
             y += height;
+        }
+
+        void Row(string leftText, string rightText, Font face)
+        {
+            var height = face.GetHeight(g) + 0.3f;
+            var rightSize = g.MeasureString(rightText, face);
+            var rightW = Math.Min(width * 0.46f, rightSize.Width + 0.6f);
+            var leftRect = new RectangleF(left, y, Math.Max(8f, width - rightW), height + 0.4f);
+            var rightRect = new RectangleF(left + width - rightW, y, rightW, height + 0.4f);
+            using var leftFmt = new StringFormat { Alignment = StringAlignment.Near, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+            using var rightFmt = new StringFormat { Alignment = StringAlignment.Far, FormatFlags = StringFormatFlags.NoWrap };
+            g.DrawString(leftText, face, Brushes.Black, leftRect, leftFmt);
+            g.DrawString(rightText, face, Brushes.Black, rightRect, rightFmt);
+            y += height;
+        }
+
+        void Rule()
+        {
+            y += 0.4f;
+            g.DrawLine(Pens.Black, left, y, left + width, y);
+            y += 1.1f;
         }
 
         Line("Bilgi Fişi", bold, StringAlignment.Center);
         if (!string.IsNullOrWhiteSpace(request.When)) Line(request.When, font, StringAlignment.Center);
         if (!string.IsNullOrWhiteSpace(request.ReceiptNo)) Line(request.ReceiptNo, font, StringAlignment.Center);
-        Line("------------------------------", font);
+        Rule();
         foreach (var line in request.Lines ?? [])
-        {
-            Line(line.Name ?? "", font);
-            Line($"{line.Qty}   {line.Total} TL", font, StringAlignment.Far);
-        }
-        Line("------------------------------", font);
-        Line($"TOPLAM   {request.GrandTotal:0.00} TL", bold, StringAlignment.Far);
+            Row($"{line.Qty} {line.Name}".Trim(), $"{line.Total} TL", font);
+        Rule();
+        Row("TOPLAM", $"{request.GrandTotal:0.00} TL", bold);
         if (!string.IsNullOrWhiteSpace(request.Payment)) Line(request.Payment, font);
         if (string.Equals(request.Payment, "Parçalı", StringComparison.OrdinalIgnoreCase))
-            Line($"Nakit {request.CashAmount:0.00}   Kart {request.CardAmount:0.00}", font);
+            Row("Nakit / Kart", $"{request.CashAmount:0.00} / {request.CardAmount:0.00}", font);
         Line("Mali değeri yoktur", font, StringAlignment.Center);
         e.HasMorePages = false;
     }
