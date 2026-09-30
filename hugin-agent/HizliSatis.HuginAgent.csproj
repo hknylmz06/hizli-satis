@@ -3,8 +3,12 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
     <RootNamespace>HizliSatis.HuginAgent</RootNamespace>
     <AssemblyName>HizliSatis.HuginAgent</AssemblyName>
     <DefaultItemExcludes>$(DefaultItemExcludes);Launcher/**</DefaultItemExcludes>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="9.0.8" />
+  </ItemGroup>
 </Project>

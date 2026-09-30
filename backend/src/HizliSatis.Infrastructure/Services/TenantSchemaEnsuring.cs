@@ -386,8 +386,23 @@ public static class TenantSchemaEnsuring
             IF OBJECT_ID(N'Products', N'U') IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_Barcode' AND object_id = OBJECT_ID(N'Products'))
                 CREATE INDEX [IX_Products_Barcode] ON [Products]([Barcode]);
+            IF OBJECT_ID(N'Products', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Products_ActiveStock' AND object_id = OBJECT_ID(N'Products'))
+                CREATE INDEX [IX_Products_ActiveStock] ON [Products]([IsActive], [StockQuantity], [Name])
+                INCLUDE ([Barcode], [PurchasePrice], [SalePrice], [CriticalStockLevel], [CategoryId]);
+            IF OBJECT_ID(N'Sales', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Sales_SoldAt' AND object_id = OBJECT_ID(N'Sales'))
+                CREATE INDEX [IX_Sales_SoldAt] ON [Sales]([SoldAt]);
             IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'AutoFiscalReceipt') IS NULL
                 ALTER TABLE [Settings] ADD [AutoFiscalReceipt] bit NOT NULL CONSTRAINT [DF_Settings_AutoFiscal] DEFAULT 1;
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'ShowInfoReceipt') IS NULL
+                ALTER TABLE [Settings] ADD [ShowInfoReceipt] bit NOT NULL CONSTRAINT [DF_Settings_ShowInfo] DEFAULT 0;
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'AutoPrintInfoReceipt') IS NULL
+                ALTER TABLE [Settings] ADD [AutoPrintInfoReceipt] bit NOT NULL CONSTRAINT [DF_Settings_AutoPrintInfo] DEFAULT 0;
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'InfoPrinterName') IS NULL
+                ALTER TABLE [Settings] ADD [InfoPrinterName] nvarchar(120) NOT NULL CONSTRAINT [DF_Settings_InfoPrinter] DEFAULT N'';
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'InfoPaper') IS NULL
+                ALTER TABLE [Settings] ADD [InfoPaper] nvarchar(8) NOT NULL CONSTRAINT [DF_Settings_InfoPaper] DEFAULT N'80';
             IF OBJECT_ID(N'PosShortcuts', N'U') IS NULL
             BEGIN
                 CREATE TABLE [PosShortcuts] (

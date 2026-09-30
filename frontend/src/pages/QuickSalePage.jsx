@@ -76,6 +76,13 @@ export default function QuickSalePage() {
   const [fiscal, setFiscal] = useState(null)
   const [autoFiscalReceipt, setAutoFiscalReceipt] = useState(true)
   const [askPosAccount, setAskPosAccount] = useState(false)
+  const [showInfoReceipt, setShowInfoReceipt] = useState(false)
+  const [autoPrintInfo, setAutoPrintInfo] = useState(false)
+  const [infoPrinterName, setInfoPrinterName] = useState('')
+  const [infoPaper, setInfoPaper] = useState('80')
+  const [infoSlip, setInfoSlip] = useState(null)
+  const [infoPrinting, setInfoPrinting] = useState(false)
+  const [infoPrintError, setInfoPrintError] = useState('')
   const [posAccounts, setPosAccounts] = useState([])
   const [posAsk, setPosAsk] = useState(null)
   const [fiscalWait, setFiscalWait] = useState('')
@@ -135,6 +142,14 @@ export default function QuickSalePage() {
     fetchShortcuts(session.token).then((pack) => {
       setShortcuts(pack.ids || [])
       setProducts(pack.products || [])
+      api('/api/pos/shortcuts/images', { token: session.token }).then((rows) => {
+        if (!Array.isArray(rows) || !rows.length) return
+        const byId = new Map(rows.map((row) => [Number(row.id), row.image]))
+        setProducts((prev) => prev.map((product) => {
+          const image = byId.get(Number(product.id))
+          return image ? { ...product, image } : product
+        }))
+      }).catch(() => {})
     }).catch(() => {})
     api('/api/categories', { token: session.token }).then((list) => {
       const rows = Array.isArray(list) ? list : []
@@ -156,11 +171,14 @@ export default function QuickSalePage() {
         })))
       }
     }).catch(() => {})
-    api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
     api('/api/fiscal/settings', { token: session.token }).then(setFiscal).catch(() => setFiscal(null))
     api('/api/settings/extra', { token: session.token }).then((data) => {
       setAskPosAccount(data.askPosAccount === true)
       setAutoFiscalReceipt(data.autoFiscalReceipt !== false)
+      setShowInfoReceipt(data.showInfoReceipt === true)
+      setAutoPrintInfo(data.autoPrintInfoReceipt === true)
+      setInfoPrinterName(data.infoPrinterName || '')
+      setInfoPaper(data.infoPaper === '58' || data.infoPaper === 'a4' ? data.infoPaper : '80')
     }).catch(() => setAskPosAccount(false))
     api('/api/accounts', { token: session.token }).then((rows) => {
       const list = (Array.isArray(rows) ? rows : []).filter((row) => row.type === 'pos')
@@ -169,6 +187,11 @@ export default function QuickSalePage() {
     }).catch(() => setPosAccounts([]))
     inputRef.current?.focus()
   }, [session.token])
+
+  useEffect(() => {
+    if (!askCustomer || customers.length) return
+    api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
+  }, [askCustomer, customers.length, session.token])
 
   function lineGross(item) {
     return Number(item.unitPrice) * Number(item.quantity)
@@ -286,7 +309,7 @@ export default function QuickSalePage() {
     if (!shortcutOpen || shortcutMode !== 'select') return
     const q = shortcutSearch.trim()
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ page: '1', pageSize: '20' })
+      const params = new URLSearchParams({ page: '1', pageSize: '20', lite: 'true' })
       if (q) params.set('q', q)
       api(`/api/products?${params}`, { token: session.token })
         .then((page) => setShortcutHits(page.items || []))
@@ -482,6 +505,7 @@ export default function QuickSalePage() {
   }
 
   const barcodeLock = useRef(false)
+  const saleLock = useRef(false)
 
   async function addByBarcode(e, raw) {
     if (e?.preventDefault) e.preventDefault()
@@ -489,6 +513,13 @@ export default function QuickSalePage() {
     if (!code || barcodeLock.current) return
     barcodeLock.current = true
     setError('')
+    const known = products.find((item) => String(item.barcode || '') === code)
+    if (known) {
+      chooseProduct(known)
+      setBarcode('')
+      barcodeLock.current = false
+      return
+    }
     try {
       const product = await api(`/api/products/by-barcode/${encodeURIComponent(code)}`, { token: session.token })
       chooseProduct(product)
@@ -721,7 +752,11 @@ export default function QuickSalePage() {
       }
     })
     setPosAsk(null)
-    setCart([])
+    setCart((prev) => {
+      if (prev.length !== cartSnapshot.length) return prev
+      const same = prev.every((item, index) => item.lineKey === cartSnapshot[index].lineKey && Number(item.quantity) === Number(cartSnapshot[index].quantity))
+      return same ? [] : prev
+    })
     setBarcode('')
     setPaidAmount('')
     setDiscount('')
@@ -732,7 +767,60 @@ export default function QuickSalePage() {
     if (posted) msg += ` | ${posted.name}`
     setMessage(msg)
     applySoldStock(cartSnapshot)
+    const slip = {
+      receiptNo: result.receiptNo,
+      when: new Date().toLocaleString('tr-TR'),
+      payment: payMethod === 'KrediKarti' ? 'Kredi kartı' : payMethod === 'Parcali' ? 'Parçalı' : payMethod === 'Veresiye' ? 'Veresiye' : 'Nakit',
+      grandTotal: result.grandTotal,
+      cashAmount: result.cashAmount,
+      cardAmount: result.cardAmount,
+      lines: (Array.isArray(result.items) ? result.items : []).map((item) => ({
+        name: item.productName,
+        qty: String(item.quantity),
+        total: Number(item.lineTotal).toFixed(2)
+      }))
+    }
+    if (showInfoReceipt) {
+      setInfoSlip(slip)
+      setInfoPrintError('')
+    }
+    if (autoPrintInfo) sendInfoReceipt(slip)
     inputRef.current?.focus()
+  }
+
+  async function sendInfoReceipt(slip) {
+    const agentBase = (fiscal?.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
+    setInfoPrinting(true)
+    setInfoPrintError('')
+    try {
+      const res = await fetch(`${agentBase}/receipt/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: infoPrinterName || '',
+          paper: infoPaper || '80',
+          receiptNo: slip.receiptNo,
+          when: slip.when,
+          payment: slip.payment,
+          grandTotal: Number(slip.grandTotal) || 0,
+          cashAmount: Number(slip.cashAmount) || 0,
+          cardAmount: Number(slip.cardAmount) || 0,
+          lines: slip.lines
+        })
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.message || (res.status === 404
+          ? 'Sessiz baskı için kasadaki yazıcı servisini güncelle. Sistem ayarlarından kurulum dosyasını bir kez daha indir.'
+          : 'Fiş yazıcıya gidemedi. Kasada yazıcı servisi açık olsun.'))
+      }
+    } catch (err) {
+      const text = err.message || 'Fiş yazıcıya gidemedi.'
+      setInfoPrintError(text)
+      if (!showInfoReceipt) setError(text)
+    } finally {
+      setInfoPrinting(false)
+    }
   }
 
   function applySoldStock(lines) {
@@ -811,7 +899,7 @@ export default function QuickSalePage() {
   async function checkout(method, split) {
     const payMethod = method || paymentMethod
     setPaymentMethod(payMethod)
-    if (!cart.length || busy) return
+    if (!cart.length || busy || saleLock.current) return
     if (fiscal?.isEnabled && !fiscal?.isPaired) {
       setError(fiscal.needsAssignment
         ? 'Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
@@ -829,11 +917,27 @@ export default function QuickSalePage() {
     }
     setError('')
     setMessage('')
-    setBusy(true)
     const cartSnapshot = cart.map((item) => ({ ...item }))
     const payable = total
     const discountAmount = canDiscount ? cart.reduce((sum, item) => sum + lineDiscount(item), 0) + cartDiscount : 0
     const fiscalOn = fiscalReady() && payMethod !== 'Veresiye'
+    const needsPosAsk = askPosAccount && cardSale(payMethod, split) && posAccounts.length > 1
+    if (!fiscalOn && !needsPosAsk) {
+      saleLock.current = true
+      setCart([])
+      setBarcode('')
+      setPaidAmount('')
+      setDiscount('')
+      setMessage('Satış kaydediliyor...')
+      inputRef.current?.focus()
+      setTimeout(() => { saleLock.current = false }, 400)
+      saveCompletedSale(cartSnapshot, payMethod, split, discountAmount).catch((err) => {
+        setError(err.message)
+        setCart((prev) => (prev.length ? prev : cartSnapshot))
+      })
+      return
+    }
+    setBusy(true)
     try {
       if (fiscalOn) {
         const cardWait = payMethod === 'KrediKarti' || (split?.card > 0)
@@ -929,7 +1033,7 @@ export default function QuickSalePage() {
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
         {priceLook && (
-          <div className={`mb-2 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
+          <div className={`pos-alert mb-2 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'is-warn bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
             <AlertCircle className="w-4 h-4 shrink-0" />
             {fiscal?.needsAssignment
               ? 'FİYAT GÖR MODU. Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
@@ -960,13 +1064,13 @@ export default function QuickSalePage() {
         </div>
 
         {error && (
-          <div className="mb-2 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
+          <div className="pos-alert mb-2 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
             <span className="flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{error}</span>
             <button type="button" onClick={() => setError('')}><X className="w-3.5 h-3.5" /></button>
           </div>
         )}
         {message && (
-          <div className="mb-2 p-2 bg-emerald-950 border border-emerald-500/50 rounded-2xl text-emerald-100 text-[11px] flex items-center gap-1.5">
+          <div className="pos-alert is-ok mb-2 p-2 bg-emerald-950 border border-emerald-500/50 rounded-2xl text-emerald-100 text-[11px] flex items-center gap-1.5">
             <CheckCircle className="w-3.5 h-3.5 shrink-0" />{message}
           </div>
         )}
@@ -1575,6 +1679,39 @@ export default function QuickSalePage() {
                 <div className="font-bold text-sm mt-2">{okcBusy === 'cancel' ? 'Gönderiliyor...' : 'Fiş İptal Et'}</div>
                 <div className="text-[11px] text-slate-400">Askıdaki açık fişi temizler</div>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {infoSlip && (
+        <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white text-slate-900 rounded-3xl p-5 space-y-3 shadow-2xl">
+            <div className="text-center">
+              <div className="text-lg font-black">Bilgi Fişi</div>
+              <div className="text-xs text-slate-500">{infoSlip.when}</div>
+              <div className="text-xs font-mono text-slate-500">{infoSlip.receiptNo}</div>
+            </div>
+            <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
+              {infoSlip.lines.map((line, index) => (
+                <div key={`${line.name}-${index}`} className="flex justify-between gap-3 text-sm">
+                  <span>{line.qty} x {line.name}</span>
+                  <span className="font-mono shrink-0">{line.total} TL</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-slate-200 pt-2 flex justify-between font-black">
+              <span>{infoSlip.payment}</span>
+              <span>{Number(infoSlip.grandTotal).toFixed(2)} TL</span>
+            </div>
+            {infoSlip.payment === 'Parçalı' && (
+              <div className="text-xs text-slate-500">Nakit {Number(infoSlip.cashAmount).toFixed(2)} · Kart {Number(infoSlip.cardAmount).toFixed(2)}</div>
+            )}
+            <p className="text-[11px] text-center text-slate-400">Mali değeri yoktur. Yazdırma penceresi açılmaz.</p>
+            {infoPrintError && <p className="text-sm text-rose-600">{infoPrintError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setInfoSlip(null)} className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-700 font-bold">Kapat</button>
+              <button type="button" disabled={infoPrinting} onClick={() => sendInfoReceipt(infoSlip)} className="primary flex-1 py-3 rounded-xl font-black disabled:opacity-50">{infoPrinting ? 'Basılıyor...' : 'Yazdır'}</button>
             </div>
           </div>
         </div>

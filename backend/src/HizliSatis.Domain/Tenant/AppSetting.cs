@@ -8,4 +8,8 @@ public class AppSetting
     public decimal DefaultVatRate { get; set; } = 20;
     public bool AutoFiscalReceipt { get; set; } = true;
     public bool AskPosAccount { get; set; }
+    public bool ShowInfoReceipt { get; set; }
+    public bool AutoPrintInfoReceipt { get; set; }
+    public string InfoPrinterName { get; set; } = "";
+    public string InfoPaper { get; set; } = "80";
 }

@@ -20,7 +20,7 @@ public class ProductsController(
     ILogger<ProductsController> logger) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] string? q, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+    public async Task<IActionResult> List([FromQuery] string? q, [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] bool lite = false, CancellationToken ct = default)
     {
         await using var db = tenantDbFactory.Create();
         await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
@@ -48,7 +48,7 @@ public class ProductsController(
             p.IsDomestic,
             p.UnitQty,
             p.UnitType,
-            p.Image,
+            Image = lite ? null : p.Image,
             p.CriticalStockLevel,
             p.IsActive,
             p.CategoryId,
@@ -90,7 +90,6 @@ public class ProductsController(
                 p.VatRate,
                 p.StockQuantity,
                 p.Unit,
-                p.Image,
                 Variants = p.Variants
                     .OrderBy(v => v.SizeName).ThenBy(v => v.ColorName)
                     .Select(v => new { v.Id, v.SizeName, v.ColorName, v.StockQuantity })
@@ -112,8 +111,7 @@ public class ProductsController(
                     salePrice = x.SalePrice,
                     vatRate = x.VatRate,
                     x.Unit,
-                    categoryName = x.CategoryName,
-                    x.Image
+                    categoryName = x.CategoryName
                 })
                 .FirstOrDefaultAsync(ct);
         }

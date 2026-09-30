@@ -8,7 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HizliSatis.Api.Controllers;
 
-public record ExtraSettingsRequest(bool? AutoFiscalReceipt, bool? AskPosAccount);
+public record ExtraSettingsRequest(
+    bool? AutoFiscalReceipt,
+    bool? AskPosAccount,
+    bool? ShowInfoReceipt,
+    bool? AutoPrintInfoReceipt,
+    string? InfoPrinterName,
+    string? InfoPaper);
 
 [ApiController]
 [Authorize(Roles = "TenantUser")]
@@ -30,6 +36,14 @@ public class ExtraSettingsController(TenantDbContextFactory tenantDbFactory) : C
         var row = await LoadAsync(db, ct);
         if (request.AutoFiscalReceipt is bool auto) row.AutoFiscalReceipt = auto;
         if (request.AskPosAccount is bool ask) row.AskPosAccount = ask;
+        if (request.ShowInfoReceipt is bool showSlip) row.ShowInfoReceipt = showSlip;
+        if (request.AutoPrintInfoReceipt is bool autoPrint) row.AutoPrintInfoReceipt = autoPrint;
+        if (request.InfoPrinterName is not null)
+        {
+            var name = request.InfoPrinterName.Trim();
+            row.InfoPrinterName = name.Length > 120 ? name[..120] : name;
+        }
+        if (request.InfoPaper is "80" or "58" or "a4") row.InfoPaper = request.InfoPaper;
         await db.SaveChangesAsync(ct);
         return Ok(Map(row));
     }
@@ -45,5 +59,13 @@ public class ExtraSettingsController(TenantDbContextFactory tenantDbFactory) : C
         return row;
     }
 
-    private static object Map(AppSetting row) => new { autoFiscalReceipt = row.AutoFiscalReceipt, askPosAccount = row.AskPosAccount };
+    private static object Map(AppSetting row) => new
+    {
+        autoFiscalReceipt = row.AutoFiscalReceipt,
+        askPosAccount = row.AskPosAccount,
+        showInfoReceipt = row.ShowInfoReceipt,
+        autoPrintInfoReceipt = row.AutoPrintInfoReceipt,
+        infoPrinterName = row.InfoPrinterName ?? "",
+        infoPaper = row.InfoPaper is "58" or "a4" ? row.InfoPaper : "80"
+    };
 }

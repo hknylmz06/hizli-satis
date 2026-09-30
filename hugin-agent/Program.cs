@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using HizliSatis.HuginAgent;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +62,21 @@ app.MapGet("/", () => Results.Ok(new
 }));
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", pid = Environment.ProcessId }));
+
+app.MapGet("/printers", () => Results.Ok(new { printers = InfoReceiptPrinter.Installed() }));
+
+app.MapPost("/receipt/print", (InfoReceiptRequest request) =>
+{
+    try
+    {
+        InfoReceiptPrinter.Print(request);
+        return Results.Ok(new { ok = true, message = "Fiş yazıcıya gitti." });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { ok = false, message = ex.Message });
+    }
+});
 
 app.MapGet("/machine/info", () =>
 {
