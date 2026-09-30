@@ -80,6 +80,7 @@ export default function QuickSalePage() {
   const [autoPrintInfo, setAutoPrintInfo] = useState(false)
   const [infoPrinterName, setInfoPrinterName] = useState('')
   const [infoPaper, setInfoPaper] = useState('80')
+  const [companyProfile, setCompanyProfile] = useState({ companyName: '', companyAddress: '', companyPhone: '', companyTaxOffice: '', companyTaxNo: '', receiptFooter: '' })
   const [infoSlip, setInfoSlip] = useState(null)
   const [infoPrinting, setInfoPrinting] = useState(false)
   const [infoPrintError, setInfoPrintError] = useState('')
@@ -179,6 +180,14 @@ export default function QuickSalePage() {
       setAutoPrintInfo(data.autoPrintInfoReceipt === true)
       setInfoPrinterName(data.infoPrinterName || '')
       setInfoPaper(data.infoPaper === '58' || data.infoPaper === 'a4' ? data.infoPaper : '80')
+      setCompanyProfile({
+        companyName: data.companyName || '',
+        companyAddress: data.companyAddress || '',
+        companyPhone: data.companyPhone || '',
+        companyTaxOffice: data.companyTaxOffice || '',
+        companyTaxNo: data.companyTaxNo || '',
+        receiptFooter: data.receiptFooter || ''
+      })
     }).catch(() => setAskPosAccount(false))
     api('/api/accounts', { token: session.token }).then((rows) => {
       const list = (Array.isArray(rows) ? rows : []).filter((row) => row.type === 'pos')
@@ -778,7 +787,8 @@ export default function QuickSalePage() {
         name: item.productName,
         qty: String(item.quantity),
         total: Number(item.lineTotal).toFixed(2)
-      }))
+      })),
+      ...companyProfile
     }
     if (showInfoReceipt) {
       setInfoSlip(slip)
@@ -805,6 +815,12 @@ export default function QuickSalePage() {
           receiptNo: slip.receiptNo,
           when: slip.when,
           payment: slip.payment,
+          storeName: slip.companyName || '',
+          address: slip.companyAddress || '',
+          phone: slip.companyPhone || '',
+          taxOffice: slip.companyTaxOffice || '',
+          taxNo: slip.companyTaxNo || '',
+          footer: slip.receiptFooter || '',
           grandTotal: Number(slip.grandTotal) || 0,
           cashAmount: Number(slip.cashAmount) || 0,
           cardAmount: Number(slip.cardAmount) || 0,
@@ -1691,7 +1707,12 @@ export default function QuickSalePage() {
         <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white text-slate-900 rounded-3xl p-5 space-y-3 shadow-2xl">
             <div className="text-center">
-              <div className="text-lg font-black">Bilgi Fişi</div>
+              <div className="text-lg font-black">{infoSlip.companyName || 'Bilgi Fişi'}</div>
+              {infoSlip.companyAddress && <div className="text-xs text-slate-500 whitespace-pre-line">{infoSlip.companyAddress}</div>}
+              {infoSlip.companyPhone && <div className="text-xs text-slate-500">{infoSlip.companyPhone}</div>}
+              {(infoSlip.companyTaxOffice || infoSlip.companyTaxNo) && (
+                <div className="text-xs text-slate-500">{[infoSlip.companyTaxOffice, infoSlip.companyTaxNo].filter(Boolean).join(' ')}</div>
+              )}
               <div className="text-xs text-slate-500">{infoSlip.when}</div>
               <div className="text-xs font-mono text-slate-500">{infoSlip.receiptNo}</div>
             </div>
@@ -1710,6 +1731,7 @@ export default function QuickSalePage() {
             {infoSlip.payment === 'Parçalı' && (
               <div className="text-xs text-slate-500">Nakit {Number(infoSlip.cashAmount).toFixed(2)} · Kart {Number(infoSlip.cardAmount).toFixed(2)}</div>
             )}
+            {infoSlip.receiptFooter && <p className="text-xs text-center text-slate-600 whitespace-pre-line">{infoSlip.receiptFooter}</p>}
             <p className="text-[11px] text-center text-slate-400">Mali değeri yoktur. Yazdırma penceresi açılmaz.</p>
             {infoPrintError && <p className="text-sm text-rose-600">{infoPrintError}</p>}
             <div className="flex gap-2">

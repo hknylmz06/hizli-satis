@@ -25,7 +25,8 @@ public static class InfoReceiptPrinter
             _ => 307
         };
         var lines = request.Lines?.Count ?? 0;
-        var height = paper == "a4" ? 1169 : Math.Clamp(220 + lines * 32, 400, 2200);
+        var extra = 6 + (request.Footer ?? "").Count(ch => ch == '\n') + (request.Address ?? "").Count(ch => ch == '\n');
+        var height = paper == "a4" ? 1169 : Math.Clamp(320 + lines * 32 + extra * 28, 520, 2600);
 
         using var doc = new PrintDocument();
         var name = (request.PrinterName ?? "").Trim();
@@ -83,6 +84,25 @@ public static class InfoReceiptPrinter
             y += height;
         }
 
+        void Block(string? text, Font face, StringAlignment align)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            foreach (var raw in text.Replace("\r", "").Split('\n'))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0)
+                {
+                    y += 1f;
+                    continue;
+                }
+                var measured = g.MeasureString(line, face, new SizeF(width, 40f));
+                var rect = new RectangleF(left, y, width, measured.Height + 0.2f);
+                using var format = new StringFormat { Alignment = align };
+                g.DrawString(line, face, Brushes.Black, rect, format);
+                y += measured.Height + 0.15f;
+            }
+        }
+
         void Rule()
         {
             y += 0.4f;
@@ -90,7 +110,14 @@ public static class InfoReceiptPrinter
             y += 1.1f;
         }
 
-        Line("Bilgi Fişi", bold, StringAlignment.Center);
+        if (!string.IsNullOrWhiteSpace(request.StoreName))
+            Block(request.StoreName, bold, StringAlignment.Center);
+        else
+            Line("Bilgi Fişi", bold, StringAlignment.Center);
+        Block(request.Address, font, StringAlignment.Center);
+        Block(request.Phone, font, StringAlignment.Center);
+        var tax = string.Join(" ", new[] { request.TaxOffice, request.TaxNo }.Where(part => !string.IsNullOrWhiteSpace(part)));
+        if (tax.Length > 0) Line(tax, font, StringAlignment.Center);
         if (!string.IsNullOrWhiteSpace(request.When)) Line(request.When, font, StringAlignment.Center);
         if (!string.IsNullOrWhiteSpace(request.ReceiptNo)) Line(request.ReceiptNo, font, StringAlignment.Center);
         Rule();
@@ -101,6 +128,11 @@ public static class InfoReceiptPrinter
         if (!string.IsNullOrWhiteSpace(request.Payment)) Line(request.Payment, font);
         if (string.Equals(request.Payment, "Parçalı", StringComparison.OrdinalIgnoreCase))
             Row("Nakit / Kart", $"{request.CashAmount:0.00} / {request.CardAmount:0.00}", font);
+        if (!string.IsNullOrWhiteSpace(request.Footer))
+        {
+            Rule();
+            Block(request.Footer, font, StringAlignment.Center);
+        }
         Line("Mali değeri yoktur", font, StringAlignment.Center);
         e.HasMorePages = false;
     }
@@ -113,6 +145,12 @@ public sealed class InfoReceiptRequest
     public string? ReceiptNo { get; set; }
     public string? When { get; set; }
     public string? Payment { get; set; }
+    public string? StoreName { get; set; }
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
+    public string? TaxOffice { get; set; }
+    public string? TaxNo { get; set; }
+    public string? Footer { get; set; }
     public decimal GrandTotal { get; set; }
     public decimal CashAmount { get; set; }
     public decimal CardAmount { get; set; }

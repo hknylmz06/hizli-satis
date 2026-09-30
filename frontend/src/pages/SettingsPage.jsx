@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Cpu, SlidersHorizontal } from 'lucide-react'
+import { Cpu, SlidersHorizontal, Store } from 'lucide-react'
 import FiscalPairingPage from './FiscalPairingPage'
 import OtherSettingsPage from './OtherSettingsPage'
+import CompanyProfilePage from './CompanyProfilePage'
 
 const NAV = [
   { id: 'fiscal', title: 'Yazarkasa', hint: 'ÖKC eşleşme ve cihaz', icon: Cpu },
+  { id: 'company', title: 'Firma Tanımı', hint: 'Fiş başı ve fiş sonu', icon: Store },
   { id: 'extra', title: 'Diğer Ayarlar', hint: 'Satış davranışı', icon: SlidersHorizontal }
 ]
 
@@ -33,7 +35,7 @@ export default function SettingsPage() {
           })}
         </nav>
         <section>
-          {tab === 'fiscal' ? <FiscalPairingPage embedded /> : <OtherSettingsPage embedded />}
+          {tab === 'fiscal' ? <FiscalPairingPage embedded /> : tab === 'company' ? <CompanyProfilePage embedded /> : <OtherSettingsPage embedded />}
         </section>
       </div>
     </div>
