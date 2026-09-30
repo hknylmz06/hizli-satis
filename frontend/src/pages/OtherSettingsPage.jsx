@@ -7,8 +7,6 @@ const PAPER = [
   ['58', '58mm Termal', 'Küçük dar fiş'],
   ['a4', 'A4 Sayfa', 'Tam sayfa']
 ]
-const PRESET_PRINTERS = ['POS-80', 'Epson TM-T28', 'XP-80C', 'Thermal Printer', 'Varsayılan']
-
 export default function OtherSettingsPage({ embedded = false }) {
   const { session } = useAuth()
   const [autoReceipt, setAutoReceipt] = useState(true)
@@ -18,6 +16,7 @@ export default function OtherSettingsPage({ embedded = false }) {
   const [printerName, setPrinterName] = useState('')
   const [paper, setPaper] = useState('80')
   const [installed, setInstalled] = useState([])
+  const [printerNote, setPrinterNote] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -36,9 +35,17 @@ export default function OtherSettingsPage({ embedded = false }) {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
     fetch('http://127.0.0.1:5055/printers')
-      .then((res) => res.json())
-      .then((data) => setInstalled(Array.isArray(data.printers) ? data.printers : []))
-      .catch(() => setInstalled([]))
+      .then(async (res) => {
+        if (!res.ok) throw new Error('liste yok')
+        const data = await res.json()
+        const names = Array.isArray(data.printers) ? data.printers.filter(Boolean) : []
+        setInstalled(names)
+        setPrinterNote(names.length ? '' : 'Bu bilgisayarda yüklü yazıcı görünmedi.')
+      })
+      .catch(() => {
+        setInstalled([])
+        setPrinterNote('Yazıcı listesi gelmedi. Kasadaki yazıcı servisini güncelleyip açık tut.')
+      })
   }, [session.token])
 
   async function save(patch) {
@@ -113,7 +120,7 @@ export default function OtherSettingsPage({ embedded = false }) {
             />
           </label>
           <div className="flex flex-wrap gap-1.5">
-            {[...PRESET_PRINTERS, ...installed.filter((name) => !PRESET_PRINTERS.includes(name))].map((name) => {
+            {['Varsayılan', ...installed].map((name) => {
               const selected = name === 'Varsayılan' ? printerName === '' : printerName === name
               return (
                 <button
@@ -130,6 +137,7 @@ export default function OtherSettingsPage({ embedded = false }) {
               )
             })}
           </div>
+          {printerNote && <p className="text-xs text-amber-600">{printerNote}</p>}
         </div>
 
         <div className="flex items-center justify-between gap-4 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
