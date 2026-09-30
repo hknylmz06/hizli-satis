@@ -32,6 +32,14 @@
   .legacy-page button.ghost {
     @apply bg-slate-800 border-slate-700 text-slate-200 text-xs;
   }
+  .legacy-page button.range-on {
+    @apply text-white text-xs font-bold;
+  }
+  .legacy-page button.range-on.today { @apply bg-emerald-600 border-emerald-500; }
+  .legacy-page button.range-on.yesterday { @apply bg-sky-600 border-sky-500; }
+  .legacy-page button.range-on.week { @apply bg-indigo-600 border-indigo-500; }
+  .legacy-page button.range-on.month { @apply bg-amber-600 border-amber-500; }
+  .legacy-page button.range-on.year { @apply bg-violet-600 border-violet-500; }
   .legacy-page button.row-edit {
     @apply bg-slate-800 border-slate-600 text-emerald-300 text-xs font-bold px-2.5 py-1 inline-flex items-center gap-1;
   }
@@ -264,7 +272,7 @@ html.light .legacy-page td {
 html.light .legacy-page .panel {
   background-color: #ffffff !important;
 }
-html.light .legacy-page button:not(.pair):not(.save):not(.toggle):not(.icon):not(.swatch):not(.chip):not(.mini):not(.switch):not(.icon-x) {
+html.light .legacy-page button:not(.pair):not(.save):not(.toggle):not(.icon):not(.swatch):not(.chip):not(.mini):not(.switch):not(.icon-x):not(.primary):not(.range-on) {
   background-color: #f8fafc !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
@@ -290,6 +298,11 @@ html.light .legacy-page button.mini.add {
 html.light .legacy-page button.chip.on {
   color: #ffffff !important;
 }
+html.light .legacy-page button.range-on.today { background-color: #059669 !important; color: #ffffff !important; border-color: #059669 !important; }
+html.light .legacy-page button.range-on.yesterday { background-color: #0284c7 !important; color: #ffffff !important; border-color: #0284c7 !important; }
+html.light .legacy-page button.range-on.week { background-color: #4f46e5 !important; color: #ffffff !important; border-color: #4f46e5 !important; }
+html.light .legacy-page button.range-on.month { background-color: #d97706 !important; color: #ffffff !important; border-color: #d97706 !important; }
+html.light .legacy-page button.range-on.year { background-color: #7c3aed !important; color: #ffffff !important; border-color: #7c3aed !important; }
 html.light .legacy-page button.primary,
 html.light .legacy-page button.seg-btn.on,
 html.light .legacy-page .def-side button.nav.on {

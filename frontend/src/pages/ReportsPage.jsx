@@ -117,14 +117,46 @@ function karRows(pack) {
   return rows
 }
 
+function activeRange(from, to) {
+  const today = todayInput()
+  const now = new Date()
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const year = `${now.getFullYear()}-01-01`
+  if (from === today && to === today) return 'today'
+  if (from === daysAgoInput(1) && to === daysAgoInput(1)) return 'yesterday'
+  if (from === daysAgoInput(6) && to === today) return 'week'
+  if (from === month && to === today) return 'month'
+  if (from === year && to === today) return 'year'
+  return ''
+}
+
 function DateBar({ from, to, onFrom, onTo, onApply }) {
+  const active = activeRange(from, to)
+  const presets = [
+    ['today', 'Bugün', () => { const day = todayInput(); return [day, day] }],
+    ['yesterday', 'Dün', () => { const day = daysAgoInput(1); return [day, day] }],
+    ['week', 'Son 7 gün', () => [daysAgoInput(6), todayInput()]],
+    ['month', 'Bu ay', () => {
+      const now = new Date()
+      return [`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, todayInput()]
+    }],
+    ['year', 'Bu yıl', () => [`${new Date().getFullYear()}-01-01`, todayInput()]]
+  ]
   return (
     <form className="panel flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); onApply() }}>
-      <button type="button" className="ghost" onClick={() => { const day = todayInput(); onFrom(day); onTo(day); onApply(day, day) }}>Bugün</button>
-      <button type="button" className="ghost" onClick={() => { const day = daysAgoInput(1); onFrom(day); onTo(day); onApply(day, day) }}>Dün</button>
-      <button type="button" className="ghost" onClick={() => { const start = daysAgoInput(6); const end = todayInput(); onFrom(start); onTo(end); onApply(start, end) }}>Son 7 gün</button>
-      <button type="button" className="ghost" onClick={() => { const now = new Date(); const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`; const end = todayInput(); onFrom(start); onTo(end); onApply(start, end) }}>Bu ay</button>
-      <button type="button" className="ghost" onClick={() => { const start = `${new Date().getFullYear()}-01-01`; const end = todayInput(); onFrom(start); onTo(end); onApply(start, end) }}>Bu yıl</button>
+      {presets.map(([id, label, range]) => (
+        <button
+          key={id}
+          type="button"
+          className={active === id ? `range-on ${id}` : 'ghost'}
+          onClick={() => {
+            const [start, end] = range()
+            onFrom(start)
+            onTo(end)
+            onApply(start, end)
+          }}
+        >{label}</button>
+      ))}
       <label className="w-40">Başlangıç<input type="date" value={from} onChange={(e) => onFrom(e.target.value)} /></label>
       <label className="w-40">Bitiş<input type="date" value={to} onChange={(e) => onTo(e.target.value)} /></label>
       <button className="primary" type="submit">Getir</button>
@@ -407,13 +439,13 @@ export default function ReportsPage() {
               <div className="panel flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[
-                    ['today', 'Bugün'],
-                    ['week', 'Bu hafta'],
-                    ['month', 'Bu ay'],
-                    ['year', 'Bu yıl'],
-                    ['custom', 'Özel tarih']
-                  ].map(([id, label]) => (
-                    <button key={id} type="button" className={karPreset === id ? 'primary' : 'ghost'} onClick={() => loadKar(id, karFrom, karTo).catch((err) => setKarError(err.message))}>{label}</button>
+                    ['today', 'Bugün', 'today'],
+                    ['week', 'Bu hafta', 'week'],
+                    ['month', 'Bu ay', 'month'],
+                    ['year', 'Bu yıl', 'year'],
+                    ['custom', 'Özel tarih', 'yesterday']
+                  ].map(([id, label, tone]) => (
+                    <button key={id} type="button" className={karPreset === id ? `range-on ${tone}` : 'ghost'} onClick={() => loadKar(id, karFrom, karTo).catch((err) => setKarError(err.message))}>{label}</button>
                   ))}
                 </div>
                 <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); loadKar('custom', karFrom, karTo).catch((err) => setKarError(err.message)) }}>
