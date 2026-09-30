@@ -23,6 +23,15 @@ export async function isAgentOnline(timeoutMs = 1200) {
   }
 }
 
+export function downloadAgentZip() {
+  const link = document.createElement('a')
+  link.href = '/agent/HizliSatisAgent-Kur.zip'
+  link.download = 'HizliSatisAgent-Kur.zip'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
 /** Giriş sonrası: ajan yoksa protokol ile gizli başlatmayı dene */
 export async function ensureHuginAgent() {
   if (await isAgentOnline()) {

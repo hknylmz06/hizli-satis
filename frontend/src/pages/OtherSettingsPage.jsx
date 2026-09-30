@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { downloadAgentZip } from '../huginAgent'
 
 const PAPER = [
   ['80', '80mm Termal', 'Standart geniş fiş'],
@@ -138,6 +139,12 @@ export default function OtherSettingsPage({ embedded = false }) {
             })}
           </div>
           {printerNote && <p className="text-xs text-amber-600">{printerNote}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-100 bg-white px-3 py-2">
+            <p className="text-xs text-slate-600">Yazıcı listesi ve sessiz fiş, bu kasadaki ajandan gelir. Sistem Ayarları → Yazarkasa içinde de aynı indirme durur.</p>
+            <button type="button" className="primary shrink-0" onClick={() => { downloadAgentZip(); setMessage('Kurulum dosyası indi. Zip’i aç, Kur dosyasına bir kez bas. Eski ajan açıksa önce kapat.') }}>
+              Ajanı indir
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-4 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">

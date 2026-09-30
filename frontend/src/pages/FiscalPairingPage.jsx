@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Cpu, Pencil, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import { useAuth } from '../auth'
-import { ensureHuginAgent } from '../huginAgent'
+import { downloadAgentZip } from '../huginAgent'
 
 const MODELS = ['HUGIN S1', 'HUGIN T300', 'HUGIN FP-300', 'HUGIN GENEL']
 const COM_PORTS = ['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9']
@@ -48,8 +48,6 @@ export default function FiscalPairingPage({ embedded = false }) {
   const [testing, setTesting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [agentOnline, setAgentOnline] = useState(null)
-  const [installing, setInstalling] = useState(false)
   const [receiptLimit, setReceiptLimit] = useState(readLimit)
 
   function fill(row) {
@@ -187,8 +185,7 @@ export default function FiscalPairingPage({ embedded = false }) {
       if (s1) {
         const agentBase = (saved.agentBaseUrl || form.agentBaseUrl || 'http://127.0.0.1:5055').replace(/\/$/, '')
         const online = await fetch(`${agentBase}/health`, { cache: 'no-store' }).then((res) => res.ok).catch(() => false)
-        setAgentOnline(online)
-        if (!online) throw new Error('S1 ajanı kapalı. Ajanı kur düğmesine bas.')
+        if (!online) throw new Error('S1 ajanı kapalı. Ajanı indir düğmesine bas, zip’i aç, Kur dosyasını çalıştır.')
         const res = await fetch(`${agentBase}/pair/test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -245,29 +242,6 @@ export default function FiscalPairingPage({ embedded = false }) {
       setError(err.message || 'Eşleşme isteği başarısız. Masaüstü Hugin köprüsü bu kasada açık olsun.')
     } finally {
       setTesting(false)
-    }
-  }
-
-  async function installAgent() {
-    setInstalling(true)
-    setError('')
-    setMessage('Ajan aranıyor...')
-    try {
-      const woke = await ensureHuginAgent()
-      if (woke.ok) {
-        setAgentOnline(true)
-        setMessage('Ajan çalışıyor. Eşleşmeyi test edebilirsin.')
-        return
-      }
-      const link = document.createElement('a')
-      link.href = '/agent/HizliSatisAgent-Kur.zip'
-      link.download = 'HizliSatisAgent-Kur.zip'
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      setMessage('Kurulum dosyası indi. Zip’i aç, Kur dosyasına bir kez bas.')
-    } finally {
-      setInstalling(false)
     }
   }
 
@@ -402,11 +376,9 @@ export default function FiscalPairingPage({ embedded = false }) {
             <button type="button" onClick={() => { setMessage(''); setError(''); setForm(blank(devices.length + 1)) }}>
               Yeni yazarkasa
             </button>
-            {s1 && !agentOnline && (
-              <button type="button" onClick={installAgent} disabled={installing} className="!bg-amber-500 !border-amber-500 !text-white">
-                {installing ? 'Hazırlanıyor...' : 'Ajanı kur'}
-              </button>
-            )}
+            <button type="button" className="primary" onClick={() => { downloadAgentZip(); setMessage('Kurulum dosyası indi. Zip’i aç, Kur dosyasına bir kez bas. Eski ajan açıksa önce kapat.') }}>
+              Ajanı indir
+            </button>
           </div>
         </form>
 
