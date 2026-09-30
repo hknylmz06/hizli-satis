@@ -77,10 +77,6 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
                 .Where(p => soldIds.Contains(p.Id))
                 .Select(p => new SoldProduct(p.Id, p.Barcode, p.Unit, p.Category != null ? p.Category.Name : null))
                 .ToListAsync(ct);
-        var activeProducts = db.Products.AsNoTracking().Where(p => p.IsActive);
-        var skuCount = await activeProducts.CountAsync(ct);
-        var lowCount = await activeProducts.CountAsync(p => p.StockQuantity <= p.CriticalStockLevel, ct);
-        var stockValue = skuCount == 0 ? 0 : await activeProducts.SumAsync(p => p.StockQuantity * p.PurchasePrice, ct);
         var accounts = await db.CashAccounts.AsNoTracking().Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync(ct);
         var collected = await db.CustomerPayments.AsNoTracking()
             .Where(p => p.PaidAt >= start && p.PaidAt < end && (p.Kind == null || p.Kind == "payment"))
@@ -232,9 +228,9 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
             },
             stok = new
             {
-                skuCount,
-                stockValue = Math.Round(stockValue, 2),
-                lowCount,
+                skuCount = 0,
+                stockValue = 0m,
+                lowCount = 0,
                 items = Array.Empty<object>()
             },
             products = productSales,
@@ -261,8 +257,13 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
         if (!string.IsNullOrWhiteSpace(needle))
             query = query.Where(p => p.Name.Contains(needle) || (p.Barcode != null && p.Barcode.Contains(needle)));
 
-        var matchCount = await query.CountAsync(ct);
-        var matchValue = matchCount == 0 ? 0 : await query.SumAsync(p => p.StockQuantity * p.PurchasePrice, ct);
+        var totals = await query.GroupBy(_ => 1).Select(g => new
+        {
+            Count = g.Count(),
+            Value = g.Sum(p => p.StockQuantity * p.PurchasePrice)
+        }).FirstOrDefaultAsync(ct);
+        var matchCount = totals?.Count ?? 0;
+        var matchValue = totals?.Value ?? 0;
         var items = await query
             .OrderBy(p => p.StockQuantity)
             .ThenBy(p => p.Name)

@@ -35,7 +35,6 @@ public class PosShortcutsController(TenantDbContextFactory tenantDbFactory, Mast
                 p.VatRate,
                 p.StockQuantity,
                 p.Unit,
-                p.Image,
                 Variants = p.Variants
                     .OrderBy(v => v.SizeName).ThenBy(v => v.ColorName)
                     .Select(v => new { v.Id, v.SizeName, v.ColorName, v.StockQuantity })
@@ -43,9 +42,27 @@ public class PosShortcutsController(TenantDbContextFactory tenantDbFactory, Mast
             })
             .ToListAsync(ct);
         var ordered = ids.Select(id => rows.FirstOrDefault(p => p.Id == id)).Where(p => p is not null).ToList();
-        var codes = ordered
-            .Where(p => string.IsNullOrWhiteSpace(p!.Image) && !string.IsNullOrWhiteSpace(p.Barcode))
-            .Select(p => p!.Barcode!)
+        return Ok(new { ids = ordered.Select(p => p!.Id), products = ordered });
+    }
+
+    [HttpGet("images")]
+    public async Task<IActionResult> Images(CancellationToken ct)
+    {
+        await using var db = tenantDbFactory.Create();
+        var ids = await db.PosShortcuts.AsNoTracking()
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Id)
+            .Select(x => x.ProductId)
+            .ToListAsync(ct);
+        if (ids.Count == 0) return Ok(Array.Empty<object>());
+
+        var rows = await db.Products.AsNoTracking()
+            .Where(p => ids.Contains(p.Id) && p.IsActive)
+            .Select(p => new { p.Id, p.Barcode, p.Image })
+            .ToListAsync(ct);
+        var codes = rows
+            .Where(p => string.IsNullOrWhiteSpace(p.Image) && !string.IsNullOrWhiteSpace(p.Barcode))
+            .Select(p => p.Barcode!)
             .Distinct()
             .ToList();
         var sharedRows = codes.Count == 0
@@ -58,19 +75,14 @@ public class PosShortcutsController(TenantDbContextFactory tenantDbFactory, Mast
             .Where(c => !string.IsNullOrWhiteSpace(c.Image))
             .GroupBy(c => c.Barcode)
             .ToDictionary(g => g.Key, g => g.First().Image!);
-        var products = ordered.Select(p => new
-        {
-            p!.Id,
-            p.Name,
-            p.Barcode,
-            p.SalePrice,
-            p.VatRate,
-            p.StockQuantity,
-            p.Unit,
-            Image = string.IsNullOrWhiteSpace(p.Image) && p.Barcode is not null && shared.TryGetValue(p.Barcode, out var photo) ? photo : p.Image,
-            p.Variants
-        });
-        return Ok(new { ids = ordered.Select(p => p!.Id), products });
+        var photos = rows
+            .Select(p => new
+            {
+                p.Id,
+                image = string.IsNullOrWhiteSpace(p.Image) && p.Barcode is not null && shared.TryGetValue(p.Barcode, out var photo) ? photo : p.Image
+            })
+            .Where(p => !string.IsNullOrWhiteSpace(p.image));
+        return Ok(photos);
     }
 
     [HttpPut]

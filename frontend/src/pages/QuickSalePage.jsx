@@ -135,6 +135,14 @@ export default function QuickSalePage() {
     fetchShortcuts(session.token).then((pack) => {
       setShortcuts(pack.ids || [])
       setProducts(pack.products || [])
+      api('/api/pos/shortcuts/images', { token: session.token }).then((rows) => {
+        if (!Array.isArray(rows) || !rows.length) return
+        const byId = new Map(rows.map((row) => [Number(row.id), row.image]))
+        setProducts((prev) => prev.map((product) => {
+          const image = byId.get(Number(product.id))
+          return image ? { ...product, image } : product
+        }))
+      }).catch(() => {})
     }).catch(() => {})
     api('/api/categories', { token: session.token }).then((list) => {
       const rows = Array.isArray(list) ? list : []
@@ -156,7 +164,6 @@ export default function QuickSalePage() {
         })))
       }
     }).catch(() => {})
-    api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
     api('/api/fiscal/settings', { token: session.token }).then(setFiscal).catch(() => setFiscal(null))
     api('/api/settings/extra', { token: session.token }).then((data) => {
       setAskPosAccount(data.askPosAccount === true)
@@ -169,6 +176,11 @@ export default function QuickSalePage() {
     }).catch(() => setPosAccounts([]))
     inputRef.current?.focus()
   }, [session.token])
+
+  useEffect(() => {
+    if (!askCustomer || customers.length) return
+    api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
+  }, [askCustomer, customers.length, session.token])
 
   function lineGross(item) {
     return Number(item.unitPrice) * Number(item.quantity)
@@ -286,7 +298,7 @@ export default function QuickSalePage() {
     if (!shortcutOpen || shortcutMode !== 'select') return
     const q = shortcutSearch.trim()
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ page: '1', pageSize: '20' })
+      const params = new URLSearchParams({ page: '1', pageSize: '20', lite: 'true' })
       if (q) params.set('q', q)
       api(`/api/products?${params}`, { token: session.token })
         .then((page) => setShortcutHits(page.items || []))
@@ -482,6 +494,7 @@ export default function QuickSalePage() {
   }
 
   const barcodeLock = useRef(false)
+  const saleLock = useRef(false)
 
   async function addByBarcode(e, raw) {
     if (e?.preventDefault) e.preventDefault()
@@ -489,6 +502,13 @@ export default function QuickSalePage() {
     if (!code || barcodeLock.current) return
     barcodeLock.current = true
     setError('')
+    const known = products.find((item) => String(item.barcode || '') === code)
+    if (known) {
+      chooseProduct(known)
+      setBarcode('')
+      barcodeLock.current = false
+      return
+    }
     try {
       const product = await api(`/api/products/by-barcode/${encodeURIComponent(code)}`, { token: session.token })
       chooseProduct(product)
@@ -721,7 +741,11 @@ export default function QuickSalePage() {
       }
     })
     setPosAsk(null)
-    setCart([])
+    setCart((prev) => {
+      if (prev.length !== cartSnapshot.length) return prev
+      const same = prev.every((item, index) => item.lineKey === cartSnapshot[index].lineKey && Number(item.quantity) === Number(cartSnapshot[index].quantity))
+      return same ? [] : prev
+    })
     setBarcode('')
     setPaidAmount('')
     setDiscount('')
@@ -811,7 +835,7 @@ export default function QuickSalePage() {
   async function checkout(method, split) {
     const payMethod = method || paymentMethod
     setPaymentMethod(payMethod)
-    if (!cart.length || busy) return
+    if (!cart.length || busy || saleLock.current) return
     if (fiscal?.isEnabled && !fiscal?.isPaired) {
       setError(fiscal.needsAssignment
         ? 'Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
@@ -829,11 +853,27 @@ export default function QuickSalePage() {
     }
     setError('')
     setMessage('')
-    setBusy(true)
     const cartSnapshot = cart.map((item) => ({ ...item }))
     const payable = total
     const discountAmount = canDiscount ? cart.reduce((sum, item) => sum + lineDiscount(item), 0) + cartDiscount : 0
     const fiscalOn = fiscalReady() && payMethod !== 'Veresiye'
+    const needsPosAsk = askPosAccount && cardSale(payMethod, split) && posAccounts.length > 1
+    if (!fiscalOn && !needsPosAsk) {
+      saleLock.current = true
+      setCart([])
+      setBarcode('')
+      setPaidAmount('')
+      setDiscount('')
+      setMessage('Satış kaydediliyor...')
+      inputRef.current?.focus()
+      setTimeout(() => { saleLock.current = false }, 400)
+      saveCompletedSale(cartSnapshot, payMethod, split, discountAmount).catch((err) => {
+        setError(err.message)
+        setCart((prev) => (prev.length ? prev : cartSnapshot))
+      })
+      return
+    }
+    setBusy(true)
     try {
       if (fiscalOn) {
         const cardWait = payMethod === 'KrediKarti' || (split?.card > 0)
