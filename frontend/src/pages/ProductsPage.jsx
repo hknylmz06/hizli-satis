@@ -402,7 +402,10 @@ export default function ProductsPage() {
       barcode,
       price: product.salePrice,
       origin: product.originCountry || '',
-      priceChangedAt: product.priceChangedAt || ''
+      priceChangedAt: product.priceChangedAt || '',
+      unitQty: product.unitQty,
+      unitType: product.unitType || '',
+      isDomestic: product.isDomestic !== false
     }]
   }
 
@@ -694,7 +697,7 @@ export default function ProductsPage() {
                     <div className="flex items-center gap-3">
                       <button type="button" className="linkish text-emerald-400" onClick={lookupBarcode}>Sorgula</button>
                       <button type="button" className="linkish text-purple-400" onClick={randomBarcode}>Rastgele Üret</button>
-                      <button type="button" className="linkish text-sky-300" onClick={() => toggleLabelPick({ id: editingId || form.barcode, name: form.name, barcode: form.barcode, salePrice: form.salePrice, originCountry: form.originCountry, priceChangedAt: form.priceChangedAt })}>Seçime ekle</button>
+                      <button type="button" className="linkish text-sky-300" onClick={() => toggleLabelPick({ id: editingId || form.barcode, name: form.name, barcode: form.barcode, salePrice: form.salePrice, originCountry: form.originCountry, priceChangedAt: form.priceChangedAt, unitQty: form.unitQty, unitType: form.unitType, isDomestic: form.isDomestic })}>Seçime ekle</button>
                     </div>
                   </div>
                   <input
