@@ -974,10 +974,9 @@ export default function QuickSalePage() {
       if (fiscalOn) {
         const cardWait = payMethod === 'KrediKarti' || (split?.card > 0)
         setFiscalWait(cardWait
-          ? 'Yazarkasadan kartı okutun ve onaylayın. Onay gelmezse ödeme alınamadı denir, ürünler sepette kalır.'
-          : 'Yazarkasa fişi basılıyor. Sepet onay gelene kadar duruyor.')
+          ? 'Kartı yazarkasadan okutun. Onay ve fiş bitene kadar bu uyarı ekranda kalır.'
+          : 'Fiş yazarkasadan çıkıyor. Bitene kadar bu uyarı ekranda kalır.')
         const fiscalResult = await printFiscalReceipt(cartSnapshot, payMethod, payable, split)
-        setFiscalWait('')
         if (fiscalResult?.paper) {
           setPaperModal({
             message: fiscalResult.message,
@@ -1757,10 +1756,10 @@ export default function QuickSalePage() {
 
       {fiscalWait && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-          <div className="w-[420px] bg-slate-900 border border-purple-500/50 rounded-3xl p-6 text-center space-y-3">
-            <div className="text-lg font-black">Yazarkasa onayı bekleniyor</div>
-            <p className="text-sm text-purple-200">{fiscalWait}</p>
-            <p className="text-xs text-slate-400">Ürünler sepette duruyor. Onay gelmeden satış kaydı yazılmaz.</p>
+          <div className="w-[420px] bg-slate-900 border border-amber-400/70 rounded-3xl p-6 text-center space-y-3 text-white">
+            <div className="text-2xl font-black tracking-wide text-amber-300">Fiş basılıyor</div>
+            <p className="text-sm text-amber-100">{fiscalWait}</p>
+            <p className="text-xs text-slate-300">Sepet duruyor. Yazarkasa bitirmeden satış kaydı yazılmaz.</p>
           </div>
         </div>
       )}
