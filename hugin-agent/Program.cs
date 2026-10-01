@@ -61,7 +61,7 @@ app.MapGet("/", () => Results.Ok(new
     tip = "Gizli çalışır. Kapatmayın."
 }));
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok", pid = Environment.ProcessId }));
+app.MapGet("/health", () => Results.Ok(new { status = "ok", pid = Environment.ProcessId, receipt = true }));
 
 app.MapGet("/printers", () => Results.Ok(new { printers = InfoReceiptPrinter.Installed() }));
 

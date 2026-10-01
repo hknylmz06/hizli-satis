@@ -403,6 +403,16 @@ public static class TenantSchemaEnsuring
                 ALTER TABLE [Settings] ADD [InfoPrinterName] nvarchar(120) NOT NULL CONSTRAINT [DF_Settings_InfoPrinter] DEFAULT N'';
             IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'InfoPaper') IS NULL
                 ALTER TABLE [Settings] ADD [InfoPaper] nvarchar(8) NOT NULL CONSTRAINT [DF_Settings_InfoPaper] DEFAULT N'80';
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'CompanyAddress') IS NULL
+                ALTER TABLE [Settings] ADD [CompanyAddress] nvarchar(200) NOT NULL CONSTRAINT [DF_Settings_Address] DEFAULT N'';
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'CompanyPhone') IS NULL
+                ALTER TABLE [Settings] ADD [CompanyPhone] nvarchar(40) NOT NULL CONSTRAINT [DF_Settings_Phone] DEFAULT N'';
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'CompanyTaxOffice') IS NULL
+                ALTER TABLE [Settings] ADD [CompanyTaxOffice] nvarchar(80) NOT NULL CONSTRAINT [DF_Settings_TaxOffice] DEFAULT N'';
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'CompanyTaxNo') IS NULL
+                ALTER TABLE [Settings] ADD [CompanyTaxNo] nvarchar(20) NOT NULL CONSTRAINT [DF_Settings_TaxNo] DEFAULT N'';
+            IF OBJECT_ID(N'Settings', N'U') IS NOT NULL AND COL_LENGTH(N'Settings', N'ReceiptFooter') IS NULL
+                ALTER TABLE [Settings] ADD [ReceiptFooter] nvarchar(500) NOT NULL CONSTRAINT [DF_Settings_Footer] DEFAULT N'';
             IF OBJECT_ID(N'PosShortcuts', N'U') IS NULL
             BEGIN
                 CREATE TABLE [PosShortcuts] (

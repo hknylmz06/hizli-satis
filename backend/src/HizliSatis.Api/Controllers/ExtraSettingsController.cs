@@ -14,7 +14,13 @@ public record ExtraSettingsRequest(
     bool? ShowInfoReceipt,
     bool? AutoPrintInfoReceipt,
     string? InfoPrinterName,
-    string? InfoPaper);
+    string? InfoPaper,
+    string? CompanyName,
+    string? CompanyAddress,
+    string? CompanyPhone,
+    string? CompanyTaxOffice,
+    string? CompanyTaxNo,
+    string? ReceiptFooter);
 
 [ApiController]
 [Authorize(Roles = "TenantUser")]
@@ -44,6 +50,12 @@ public class ExtraSettingsController(TenantDbContextFactory tenantDbFactory) : C
             row.InfoPrinterName = name.Length > 120 ? name[..120] : name;
         }
         if (request.InfoPaper is "80" or "58" or "a4") row.InfoPaper = request.InfoPaper;
+        if (request.CompanyName is not null) row.CompanyName = Cut(request.CompanyName, 120);
+        if (request.CompanyAddress is not null) row.CompanyAddress = Cut(request.CompanyAddress, 200);
+        if (request.CompanyPhone is not null) row.CompanyPhone = Cut(request.CompanyPhone, 40);
+        if (request.CompanyTaxOffice is not null) row.CompanyTaxOffice = Cut(request.CompanyTaxOffice, 80);
+        if (request.CompanyTaxNo is not null) row.CompanyTaxNo = Cut(request.CompanyTaxNo, 20);
+        if (request.ReceiptFooter is not null) row.ReceiptFooter = Cut(request.ReceiptFooter, 500);
         await db.SaveChangesAsync(ct);
         return Ok(Map(row));
     }
@@ -66,6 +78,18 @@ public class ExtraSettingsController(TenantDbContextFactory tenantDbFactory) : C
         showInfoReceipt = row.ShowInfoReceipt,
         autoPrintInfoReceipt = row.AutoPrintInfoReceipt,
         infoPrinterName = row.InfoPrinterName ?? "",
-        infoPaper = row.InfoPaper is "58" or "a4" ? row.InfoPaper : "80"
+        infoPaper = row.InfoPaper is "58" or "a4" ? row.InfoPaper : "80",
+        companyName = row.CompanyName ?? "",
+        companyAddress = row.CompanyAddress ?? "",
+        companyPhone = row.CompanyPhone ?? "",
+        companyTaxOffice = row.CompanyTaxOffice ?? "",
+        companyTaxNo = row.CompanyTaxNo ?? "",
+        receiptFooter = row.ReceiptFooter ?? ""
     };
+
+    private static string Cut(string value, int max)
+    {
+        var text = value.Trim();
+        return text.Length > max ? text[..max] : text;
+    }
 }

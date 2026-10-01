@@ -55,6 +55,7 @@ static int Install(string installDir, string launcherExe, string agentExe)
     var targetLauncher = Path.Combine(installDir, "HizliSatis.AgentLauncher.exe");
     var sourceDir = Path.GetDirectoryName(launcherExe);
     var siblingAgent = sourceDir is null ? null : Path.Combine(sourceDir, "HizliSatis.HuginAgent.exe");
+    StopRunningAgent();
     try
     {
         if (siblingAgent is not null &&
@@ -62,7 +63,12 @@ static int Install(string installDir, string launcherExe, string agentExe)
             !string.Equals(Path.GetFullPath(siblingAgent), Path.GetFullPath(agentExe), StringComparison.OrdinalIgnoreCase))
             File.Copy(siblingAgent, agentExe, overwrite: true);
     }
-    catch { /* çalışan kopya kilitliyse kurulu dosya durur */ }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Yeni ajan kopyalanamadı. Eski ajan hâlâ açıksa görev yöneticisinden kapatıp Kur'a tekrar bas.");
+        Console.WriteLine(ex.Message);
+        return 1;
+    }
 
     try
     {
@@ -79,10 +85,43 @@ static int Install(string installDir, string launcherExe, string agentExe)
 
     RegisterProtocol(targetLauncher);
     RegisterStartup(targetLauncher);
+    if (IsPortOpen(5055))
+        StopRunningAgent();
     if (!IsPortOpen(5055))
         StartAgentHidden(agentExe);
+    else
+    {
+        Console.WriteLine("5055 hâlâ dolu. Eski ajan kapanmadı, fiş basımı çalışmaz.");
+        return 1;
+    }
     Console.WriteLine("Kurulum tamam. Ajan gizli başlatıldı ve Windows açılışında otomatik gelecek.");
     return 0;
+}
+
+static void StopRunningAgent()
+{
+    foreach (var proc in Process.GetProcessesByName("HizliSatis.HuginAgent"))
+    {
+        try
+        {
+            if (!proc.HasExited)
+            {
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(5000);
+            }
+        }
+        catch
+        {
+            /* kilitli süreç kopyayı da kilitleyebilir */
+        }
+        finally
+        {
+            proc.Dispose();
+        }
+    }
+
+    for (var i = 0; i < 25 && IsPortOpen(5055); i++)
+        Thread.Sleep(200);
 }
 
 static void RegisterProtocol(string launcherPath)
