@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { Cpu, SlidersHorizontal, Store } from 'lucide-react'
+import { Barcode, Cpu, SlidersHorizontal, Store } from 'lucide-react'
 import FiscalPairingPage from './FiscalPairingPage'
 import OtherSettingsPage from './OtherSettingsPage'
 import CompanyProfilePage from './CompanyProfilePage'
+import BarcodeLabelSettingsPage from './BarcodeLabelSettingsPage'
 
 const NAV = [
   { id: 'fiscal', title: 'Yazarkasa', hint: 'ÖKC eşleşme ve cihaz', icon: Cpu },
   { id: 'company', title: 'Firma Tanımı', hint: 'Fiş başı ve fiş sonu', icon: Store },
+  { id: 'barcode', title: 'Barkod Etiketi', hint: 'A4 sayfa veya etiket ölçüsü', icon: Barcode },
   { id: 'extra', title: 'Diğer Ayarlar', hint: 'Satış davranışı', icon: SlidersHorizontal }
 ]
 
@@ -35,7 +37,7 @@ export default function SettingsPage() {
           })}
         </nav>
         <section>
-          {tab === 'fiscal' ? <FiscalPairingPage embedded /> : tab === 'company' ? <CompanyProfilePage embedded /> : <OtherSettingsPage embedded />}
+          {tab === 'fiscal' ? <FiscalPairingPage embedded /> : tab === 'company' ? <CompanyProfilePage embedded /> : tab === 'barcode' ? <BarcodeLabelSettingsPage embedded /> : <OtherSettingsPage embedded />}
         </section>
       </div>
     </div>

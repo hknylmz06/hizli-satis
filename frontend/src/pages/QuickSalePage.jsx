@@ -698,7 +698,7 @@ export default function QuickSalePage() {
           data = await postBridge('/api/sale', saleBody)
           message = data.message || ''
         }
-        const ok = !!(data.success || data.status === 'ok') && !data.simulation
+        const ok = data.success === true && data.status === 'ok' && data.simulation !== true
         const paper = /paper|kagit|kağıt|no_paper/i.test(message)
         return { ok, message: message || (ok ? 'Fiş basıldı.' : 'Ödeme alınamadı. Yazarkasadan onay gelmedi.'), paper, documentId: data.documentId || null }
       } catch (err) {
@@ -735,7 +735,10 @@ export default function QuickSalePage() {
         })
       })
       const data = await res.json().catch(() => null)
-      return data || { ok: false, message: 'Ödeme alınamadı. Yazarkasa yanıt vermedi.' }
+      if (data?.ok !== true) {
+        return { ok: false, paper: data?.paper === true, documentId: data?.documentId || null, message: data?.message || 'Ödeme alınamadı. Yazarkasadan onay gelmedi.' }
+      }
+      return data
     } catch (err) {
       return { ok: false, message: 'Ödeme alınamadı. Yazarkasadan onay gelmedi.' }
     }
@@ -871,7 +874,7 @@ export default function QuickSalePage() {
       const data = isS1Device()
         ? await postAgent('/document/resume', { documentId: paperModal.documentId })
         : await postBridge('/api/document/resume', { documentId: paperModal.documentId })
-      if (!(data?.ok || data?.success || data?.status === 'ok')) throw new Error(data?.message || 'Fiş devam ettirilemedi.')
+      if (data?.ok !== true && data?.success !== true) throw new Error(data?.message || 'Fiş devam ettirilemedi.')
       await saveCompletedSale(paperModal.cartSnapshot, paperModal.payMethod, paperModal.split, paperModal.discountAmount)
       setPaperModal(null)
     } catch (err) {
@@ -944,7 +947,12 @@ export default function QuickSalePage() {
     const cartSnapshot = cart.map((item) => ({ ...item }))
     const payable = total
     const discountAmount = canDiscount ? cart.reduce((sum, item) => sum + lineDiscount(item), 0) + cartDiscount : 0
-    const fiscalOn = fiscalReady() && payMethod !== 'Veresiye'
+    const fiscalRequired = autoFiscalReceipt && payMethod !== 'Veresiye'
+    if (fiscalRequired && !fiscalReady()) {
+      setError('Fiş basımı açık. Yazarkasa onaylamadan satış tamamlanmaz. Eşleşmeyi kontrol et.')
+      return
+    }
+    const fiscalOn = fiscalRequired
     const needsPosAsk = askPosAccount && cardSale(payMethod, split) && posAccounts.length > 1
     if (!fiscalOn && !needsPosAsk) {
       saleLock.current = true
@@ -981,8 +989,8 @@ export default function QuickSalePage() {
           })
           return
         }
-        if (!fiscalResult?.ok && !fiscalResult?.skipped) {
-          setError(fiscalResult?.message || 'Ödeme alınamadı. Sepet duruyor.')
+        if (fiscalResult?.ok !== true || fiscalResult?.skipped) {
+          setError(fiscalResult?.message || 'Yazarkasa onaylamadı. Satış kaydedilmedi, sepet duruyor.')
           return
         }
       }
