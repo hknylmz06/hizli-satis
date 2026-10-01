@@ -673,14 +673,10 @@ export default function QuickSalePage() {
     if (!fiscalReady()) return { skipped: true }
     if (!isS1Device()) {
       try {
-        const connected = await postBridge('/api/connect', bridgeBody())
-        if (!connected.connected || connected.simulation) {
-          return { ok: false, message: connected.message || 'T300 yazarkasasına bağlanılamadı. Sepet duruyor.' }
-        }
         const payments = payMethod === 'Parcali' && split
           ? [{ type: 'CASH', amount: split.cash }, { type: 'CREDIT', amount: split.card }].filter((row) => row.amount > 0)
           : [{ type: payMethod === 'KrediKarti' ? 'CREDIT' : 'CASH', amount: payable }]
-        const data = await postBridge('/api/sale', {
+        const saleBody = {
           items: cartSnapshot.map((item) => ({
             name: item.name,
             barcode: item.barcode || '',
@@ -691,9 +687,18 @@ export default function QuickSalePage() {
           payments,
           discountAmount: 0,
           notes: 'POS Satış'
-        })
+        }
+        let data = await postBridge('/api/sale', saleBody)
+        let message = data.message || ''
+        if (!data.success && /bağlı değil|bağlantı koptu|baglan/i.test(message)) {
+          const connected = await postBridge('/api/connect', bridgeBody())
+          if (!connected.connected || connected.simulation) {
+            return { ok: false, message: connected.message || 'T300 yazarkasasına bağlanılamadı. Sepet duruyor.' }
+          }
+          data = await postBridge('/api/sale', saleBody)
+          message = data.message || ''
+        }
         const ok = !!(data.success || data.status === 'ok') && !data.simulation
-        const message = data.message || ''
         const paper = /paper|kagit|kağıt|no_paper/i.test(message)
         return { ok, message: message || (ok ? 'Fiş basıldı.' : 'Ödeme alınamadı. Yazarkasadan onay gelmedi.'), paper, documentId: data.documentId || null }
       } catch (err) {
