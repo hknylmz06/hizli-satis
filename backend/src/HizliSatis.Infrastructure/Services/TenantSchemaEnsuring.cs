@@ -209,6 +209,10 @@ public static class TenantSchemaEnsuring
                 ALTER TABLE [Products] ADD [Unit] nvarchar(40) NULL;
             IF COL_LENGTH(N'Products', N'OriginCountry') IS NULL
                 ALTER TABLE [Products] ADD [OriginCountry] nvarchar(80) NULL;
+            IF COL_LENGTH(N'Products', N'PriceChangedAt') IS NULL
+                ALTER TABLE [Products] ADD [PriceChangedAt] datetime2 NULL;
+            IF COL_LENGTH(N'Products', N'PriceChangedAt') IS NOT NULL
+                EXEC(N'UPDATE [Products] SET [PriceChangedAt] = [CreatedAt] WHERE [PriceChangedAt] IS NULL');
             IF COL_LENGTH(N'Products', N'IsDomestic') IS NULL
                 ALTER TABLE [Products] ADD [IsDomestic] bit NULL;
             IF COL_LENGTH(N'Products', N'UnitQty') IS NULL
