@@ -30,7 +30,7 @@ export default function BarcodeLabelSettingsPage({ embedded = false }) {
       <div className="max-w-3xl mx-auto bg-white border border-sky-100 rounded-3xl shadow-sm p-5 md:p-6 space-y-4">
         <div>
           <h1>Barkod Etiketi</h1>
-          <p className="text-sm text-slate-500">Stoktan seçtiğin her üründen bir etiket basılır. Raf etiketindeki satırlar buradan açılır: birim, yerli üretim, fiyat, KDV dahil birim fiyat, fiyat tarihi, menşei ve firma adı. Tam yazı 80 × 40 mm etikete sığar.</p>
+          <p className="text-sm text-slate-500">Stoktan seçtiğin her üründen bir etiket basılır. Raf etiketindeki satırlar buradan açılır: birim, yerli üretim, fiyat, KDV dahil birim fiyat, fiyat değişiklik tarihi, menşei ve firma adı. Tam yazı 80 × 40 mm etikete sığar.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={form.mode === 'a4' ? 'paper-on' : ''} onClick={() => patch({ mode: 'a4' })}>A4 sayfa</button>
@@ -91,7 +91,7 @@ export default function BarcodeLabelSettingsPage({ embedded = false }) {
           <button type="button" className={form.showDomestic ? 'paper-on' : ''} onClick={() => patch({ showDomestic: !form.showDomestic })}>Yerli üretim {form.showDomestic ? 'açık' : 'kapalı'}</button>
           <button type="button" className={form.showPrice ? 'paper-on' : ''} onClick={() => patch({ showPrice: !form.showPrice })}>Fiyat {form.showPrice ? 'açık' : 'kapalı'}</button>
           <button type="button" className={form.showUnitPrice ? 'paper-on' : ''} onClick={() => patch({ showUnitPrice: !form.showUnitPrice })}>KDV dahil birim fiyat {form.showUnitPrice ? 'açık' : 'kapalı'}</button>
-          <button type="button" className={form.showPriceDate ? 'paper-on' : ''} onClick={() => patch({ showPriceDate: !form.showPriceDate })}>Fiyat geçerlilik tarihi {form.showPriceDate ? 'açık' : 'kapalı'}</button>
+          <button type="button" className={form.showPriceDate ? 'paper-on' : ''} onClick={() => patch({ showPriceDate: !form.showPriceDate })}>Fiyat değişiklik tarihi {form.showPriceDate ? 'açık' : 'kapalı'}</button>
           <button type="button" className={form.showOrigin ? 'paper-on' : ''} onClick={() => patch({ showOrigin: !form.showOrigin })}>Menşei {form.showOrigin ? 'açık' : 'kapalı'}</button>
           <button type="button" className={form.showCompany ? 'paper-on' : ''} onClick={() => patch({ showCompany: !form.showCompany })}>Firma adı {form.showCompany ? 'açık' : 'kapalı'}</button>
         </div>

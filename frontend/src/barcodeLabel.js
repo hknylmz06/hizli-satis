@@ -146,7 +146,7 @@ function labelMarkup(job, settings) {
   const changed = settings.showPriceDate ? labelDate(job.priceChangedAt) : ''
   const left = [
     unitPrice ? `<div>${escapeHtml(unitPrice)}</div>` : '',
-    changed ? `<div>Fiyat Geçerlilik Tarihi ${escapeHtml(changed)}</div>` : ''
+    changed ? `<div>Fiyat Değişiklik Tarihi ${escapeHtml(changed)}</div>` : ''
   ].join('')
   const right = [
     settings.showOrigin && job.origin ? `<div>Menşei : ${escapeHtml(job.origin)}</div>` : '',
