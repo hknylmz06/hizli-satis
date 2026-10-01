@@ -101,15 +101,21 @@ function labelMarkup(job, settings) {
   return `<div class="label">${name}${code128Svg(job.barcode)}<div class="code">${escapeHtml(job.barcode)}</div>${price}</div>`
 }
 
-export function printBarcodeLabels(job) {
+export function printBarcodeLabels(jobs, mode) {
   const settings = readBarcodeLabelSettings()
-  const copies = clamp(job.copies, 1, 500, 1)
-  const barcode = String(job.barcode || '').trim()
-  if (!barcode || !code128Svg(barcode)) {
-    throw new Error('Bu barkod yazdırılamıyor. Harf ve rakam kullan.')
-  }
-  const one = labelMarkup({ ...job, barcode }, settings)
-  const labels = Array.from({ length: copies }, () => one)
+  if (mode === 'a4' || mode === 'label') settings.mode = mode
+  const list = (Array.isArray(jobs) ? jobs : [jobs])
+    .map((job) => ({
+      name: job?.name || '',
+      barcode: String(job?.barcode || '').trim(),
+      price: job?.price
+    }))
+    .filter((job) => job.barcode)
+  if (!list.length) throw new Error('Basılacak barkodlu kart seç.')
+  const labels = list.map((job) => {
+    if (!code128Svg(job.barcode)) throw new Error(`${job.name || job.barcode} barkodu yazdırılamıyor.`)
+    return labelMarkup(job, settings)
+  })
   const perSheet = labelsPerSheet(settings)
   const css = settings.mode === 'label'
     ? `@page { size: ${settings.labelWidth}mm ${settings.labelHeight}mm; margin: 1.2mm; }
@@ -118,7 +124,7 @@ export function printBarcodeLabels(job) {
        svg { width: 92%; height: ${Math.max(8, Math.round(settings.labelHeight * 0.42))}mm; }`
     : `@page { size: A4 portrait; margin: 8mm; }
        html, body { margin: 0; }
-       .sheet { display: grid; grid-template-columns: repeat(${settings.cols}, 1fr); grid-template-rows: repeat(${settings.rows}, 1fr); width: 194mm; height: 281mm; break-after: page; }
+       .sheet { display: grid; grid-template-columns: repeat(${settings.cols}, 1fr); grid-auto-rows: ${Math.floor(275 / settings.rows)}mm; width: 194mm; break-after: page; align-content: start; }
        .label { border: 0.15mm dashed #cbd5e1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; padding: 1mm; }
        svg { width: 90%; height: 14mm; }`
   const body = settings.mode === 'label'

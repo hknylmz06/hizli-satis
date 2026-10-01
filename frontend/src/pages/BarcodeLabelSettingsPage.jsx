@@ -29,7 +29,7 @@ export default function BarcodeLabelSettingsPage({ embedded = false }) {
       <div className="max-w-3xl mx-auto bg-white border border-sky-100 rounded-3xl shadow-sm p-5 md:p-6 space-y-4">
         <div>
           <h1>Barkod Etiketi</h1>
-          <p className="text-sm text-slate-500">Stok kartından barkod basılırken bu ölçü kullanılır. A4 sayfaya 25 veya 30 etiket sığar. Etiket yazıcıda kağıdın kendi ölçüsünü seç.</p>
+          <p className="text-sm text-slate-500">Stoktan seçtiğin her üründen bir etiket basılır. Aynı barkod çoğaltılmaz. A4 sayfaya 25 veya 30 farklı ürün sığar.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={form.mode === 'a4' ? 'paper-on' : ''} onClick={() => patch({ mode: 'a4' })}>A4 sayfa</button>
@@ -57,7 +57,7 @@ export default function BarcodeLabelSettingsPage({ embedded = false }) {
                 <input type="number" min="1" max="12" value={form.rows} onChange={(e) => patch({ rows: Number(e.target.value) })} className={field} />
               </label>
             </div>
-            <p className="text-sm text-slate-600">Bir A4 sayfada <strong>{form.cols * form.rows}</strong> barkod çıkar.</p>
+            <p className="text-sm text-slate-600">Bir A4 sayfaya en fazla <strong>{form.cols * form.rows}</strong> farklı ürün sığar.</p>
           </div>
         ) : (
           <div className="space-y-3">
