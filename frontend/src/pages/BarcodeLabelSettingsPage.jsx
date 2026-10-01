@@ -87,6 +87,9 @@ export default function BarcodeLabelSettingsPage({ embedded = false }) {
         <div className="flex flex-wrap gap-2">
           <button type="button" className={form.showName ? 'paper-on' : ''} onClick={() => patch({ showName: !form.showName })}>Ürün adı {form.showName ? 'açık' : 'kapalı'}</button>
           <button type="button" className={form.showPrice ? 'paper-on' : ''} onClick={() => patch({ showPrice: !form.showPrice })}>Fiyat {form.showPrice ? 'açık' : 'kapalı'}</button>
+          <button type="button" className={form.showOrigin ? 'paper-on' : ''} onClick={() => patch({ showOrigin: !form.showOrigin })}>Üretim yeri {form.showOrigin ? 'açık' : 'kapalı'}</button>
+          <button type="button" className={form.showPriceDate ? 'paper-on' : ''} onClick={() => patch({ showPriceDate: !form.showPriceDate })}>Fiyat değişiklik tarihi {form.showPriceDate ? 'açık' : 'kapalı'}</button>
+          <button type="button" className={form.showCompany ? 'paper-on' : ''} onClick={() => patch({ showCompany: !form.showCompany })}>Firma adı {form.showCompany ? 'açık' : 'kapalı'}</button>
         </div>
         {message && <p className="text-sm text-emerald-700">{message}</p>}
       </div>

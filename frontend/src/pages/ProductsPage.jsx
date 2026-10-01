@@ -129,6 +129,7 @@ export default function ProductsPage() {
   const [stockPages, setStockPages] = useState(1)
   const [stockQuery, setStockQuery] = useState('')
   const [labelPicks, setLabelPicks] = useState(() => new Map())
+  const [labelCompany, setLabelCompany] = useState(session.firmaName || '')
 
   async function load(page = stockPage, q = stockQuery) {
     setError('')
@@ -155,6 +156,9 @@ export default function ProductsPage() {
   useEffect(() => {
     load().catch((e) => setError(e.message))
     fetchShortcuts(session.token).catch(() => {})
+    api('/api/settings/extra', { token: session.token })
+      .then((data) => { if (data.companyName) setLabelCompany(data.companyName) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -297,6 +301,7 @@ export default function ProductsPage() {
       vatRate: product.vatRate ?? 20,
       salePrice: product.salePrice ?? '',
       originCountry: product.originCountry || '',
+      priceChangedAt: product.priceChangedAt || '',
       unitQty: product.unitQty || 1,
       unitType: product.unitType || 'Adet',
       isDomestic: product.isDomestic !== false,
@@ -392,7 +397,13 @@ export default function ProductsPage() {
   function pickFrom(product) {
     const barcode = String(product?.barcode || '').trim()
     if (!barcode) return null
-    return [product.id, { name: product.name || '', barcode, price: product.salePrice }]
+    return [product.id, {
+      name: product.name || '',
+      barcode,
+      price: product.salePrice,
+      origin: product.originCountry || '',
+      priceChangedAt: product.priceChangedAt || ''
+    }]
   }
 
   function toggleLabelPick(product) {
@@ -425,7 +436,7 @@ export default function ProductsPage() {
 
   function printPicked(mode) {
     try {
-      printBarcodeLabels([...labelPicks.values()], mode)
+      printBarcodeLabels([...labelPicks.values()].map((job) => ({ ...job, company: labelCompany })), mode)
       setError('')
     } catch (err) {
       setError(err.message)
@@ -683,7 +694,7 @@ export default function ProductsPage() {
                     <div className="flex items-center gap-3">
                       <button type="button" className="linkish text-emerald-400" onClick={lookupBarcode}>Sorgula</button>
                       <button type="button" className="linkish text-purple-400" onClick={randomBarcode}>Rastgele Üret</button>
-                      <button type="button" className="linkish text-sky-300" onClick={() => toggleLabelPick({ id: editingId || form.barcode, name: form.name, barcode: form.barcode, salePrice: form.salePrice })}>Seçime ekle</button>
+                      <button type="button" className="linkish text-sky-300" onClick={() => toggleLabelPick({ id: editingId || form.barcode, name: form.name, barcode: form.barcode, salePrice: form.salePrice, originCountry: form.originCountry, priceChangedAt: form.priceChangedAt })}>Seçime ekle</button>
                     </div>
                   </div>
                   <input

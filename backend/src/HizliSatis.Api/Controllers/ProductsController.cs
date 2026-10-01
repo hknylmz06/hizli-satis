@@ -41,6 +41,7 @@ public class ProductsController(
             p.Barcode,
             p.PurchasePrice,
             p.SalePrice,
+            p.PriceChangedAt,
             p.VatRate,
             p.StockQuantity,
             p.Unit,
@@ -132,6 +133,7 @@ public class ProductsController(
             DepartmentId = request.DepartmentId,
             PurchasePrice = request.PurchasePrice,
             SalePrice = request.SalePrice,
+            PriceChangedAt = DateTime.UtcNow,
             VatRate = request.VatRate,
             StockQuantity = request.StockQuantity,
             CriticalStockLevel = request.CriticalStockLevel
@@ -162,6 +164,7 @@ public class ProductsController(
         product.CategoryId = request.CategoryId;
         product.DepartmentId = request.DepartmentId;
         product.PurchasePrice = request.PurchasePrice;
+        if (product.SalePrice != request.SalePrice) product.PriceChangedAt = DateTime.UtcNow;
         product.SalePrice = request.SalePrice;
         product.VatRate = request.VatRate;
         product.StockQuantity = request.StockQuantity;
@@ -309,6 +312,7 @@ public class ProductsController(
         product.Barcode,
         product.PurchasePrice,
         product.SalePrice,
+        product.PriceChangedAt,
         product.VatRate,
         product.StockQuantity,
         product.CriticalStockLevel,

@@ -21,7 +21,10 @@ export const barcodeLabelDefaults = {
   labelWidth: 40,
   labelHeight: 30,
   showName: true,
-  showPrice: true
+  showPrice: true,
+  showOrigin: false,
+  showPriceDate: false,
+  showCompany: false
 }
 
 function clamp(value, min, max, fallback) {
@@ -40,7 +43,10 @@ export function readBarcodeLabelSettings() {
       labelWidth: clamp(raw.labelWidth, 20, 120, barcodeLabelDefaults.labelWidth),
       labelHeight: clamp(raw.labelHeight, 12, 160, barcodeLabelDefaults.labelHeight),
       showName: raw.showName !== false,
-      showPrice: raw.showPrice !== false
+      showPrice: raw.showPrice !== false,
+      showOrigin: raw.showOrigin === true,
+      showPriceDate: raw.showPriceDate === true,
+      showCompany: raw.showCompany === true
     }
   } catch {
     return { ...barcodeLabelDefaults }
@@ -95,10 +101,21 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;')
 }
 
+function labelDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })
+}
+
 function labelMarkup(job, settings) {
+  const company = settings.showCompany && job.company ? `<div class="meta">${escapeHtml(job.company)}</div>` : ''
   const name = settings.showName ? `<div class="name">${escapeHtml(job.name)}</div>` : ''
+  const origin = settings.showOrigin && job.origin ? `<div class="meta">${escapeHtml(job.origin)}</div>` : ''
   const price = settings.showPrice ? `<div class="price">${Number(job.price || 0).toFixed(2)} TL</div>` : ''
-  return `<div class="label">${name}${code128Svg(job.barcode)}<div class="code">${escapeHtml(job.barcode)}</div>${price}</div>`
+  const changed = settings.showPriceDate ? labelDate(job.priceChangedAt) : ''
+  const priceDate = changed ? `<div class="meta">${escapeHtml(changed)}</div>` : ''
+  return `<div class="label">${company}${name}${code128Svg(job.barcode)}<div class="code">${escapeHtml(job.barcode)}</div>${price}${priceDate}${origin}</div>`
 }
 
 export function printBarcodeLabels(jobs, mode) {
@@ -108,7 +125,10 @@ export function printBarcodeLabels(jobs, mode) {
     .map((job) => ({
       name: job?.name || '',
       barcode: String(job?.barcode || '').trim(),
-      price: job?.price
+      price: job?.price,
+      origin: job?.origin || '',
+      priceChangedAt: job?.priceChangedAt || '',
+      company: job?.company || ''
     }))
     .filter((job) => job.barcode)
   if (!list.length) throw new Error('Basılacak barkodlu kart seç.')
@@ -134,6 +154,7 @@ export function printBarcodeLabels(jobs, mode) {
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; color: #000; background: #fff; }
     .name { font-size: 8pt; font-weight: 700; line-height: 1.15; max-height: 2.3em; overflow: hidden; width: 100%; }
+    .meta { font-size: 6.5pt; line-height: 1.1; max-height: 1.2em; overflow: hidden; width: 100%; }
     .code { font-size: 7pt; font-family: Consolas, monospace; letter-spacing: 0.4px; }
     .price { font-size: 9pt; font-weight: 800; }
     ${css}

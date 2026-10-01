@@ -11,6 +11,7 @@ public class Product
     public Department? Department { get; set; }
     public decimal PurchasePrice { get; set; }
     public decimal SalePrice { get; set; }
+    public DateTime? PriceChangedAt { get; set; }
     public decimal VatRate { get; set; } = 20;
     public decimal StockQuantity { get; set; }
     public decimal CriticalStockLevel { get; set; } = 5;
