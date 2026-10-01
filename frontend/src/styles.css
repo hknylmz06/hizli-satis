@@ -168,6 +168,9 @@
   .legacy-page .fiscal-screen button {
     @apply bg-white border border-slate-300 text-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold;
   }
+  .legacy-page .fiscal-screen button.paper-on {
+    @apply bg-blue-600 border-blue-500 text-white;
+  }
   .legacy-page .fiscal-screen button.pair {
     @apply bg-violet-600 border-violet-600 text-white;
   }

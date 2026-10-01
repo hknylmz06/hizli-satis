@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Check, Cpu, Layers, Package, Palette, Pencil, Percent, Plus, Shirt, Star, Tag, Trash2, UserCog, X } from 'lucide-react'
+import { Barcode, Check, Cpu, Layers, Package, Palette, Pencil, Percent, Plus, Shirt, Star, Tag, Trash2, UserCog, X } from 'lucide-react'
 import { api, fetchShortcuts, readLocalShortcuts, storeShortcuts } from '../api'
 import { searchProductImages } from '../productImages'
 import { useAuth } from '../auth'
 import { allows } from '../permissions'
+import { code128Svg, labelsPerSheet, printBarcodeLabels, readBarcodeLabelSettings, saveBarcodeLabelSettings } from '../barcodeLabel'
 
 const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#64748b']
 const VAT_RATES = [0, 1, 10, 20]
@@ -127,6 +128,10 @@ export default function ProductsPage() {
   const [stockTotal, setStockTotal] = useState(0)
   const [stockPages, setStockPages] = useState(1)
   const [stockQuery, setStockQuery] = useState('')
+  const [labelJob, setLabelJob] = useState(null)
+  const [labelCount, setLabelCount] = useState(30)
+  const [labelSettings, setLabelSettings] = useState(readBarcodeLabelSettings)
+  const [labelError, setLabelError] = useState('')
 
   async function load(page = stockPage, q = stockQuery) {
     setError('')
@@ -387,6 +392,38 @@ export default function ProductsPage() {
     })
   }
 
+  function openLabels(product) {
+    const barcode = String(product?.barcode || '').trim()
+    if (!barcode) {
+      setError('Bu kartın barkodu yok. Önce barkod yaz.')
+      return
+    }
+    const settings = readBarcodeLabelSettings()
+    setLabelSettings(settings)
+    setLabelCount(settings.mode === 'a4' ? labelsPerSheet(settings) : 1)
+    setLabelError('')
+    setLabelJob({
+      name: product.name || '',
+      barcode,
+      price: product.salePrice
+    })
+  }
+
+  function chooseLabelLayout(patch) {
+    const saved = saveBarcodeLabelSettings(patch)
+    setLabelSettings(saved)
+    if (saved.mode === 'a4') setLabelCount(labelsPerSheet(saved))
+  }
+
+  function printLabels() {
+    try {
+      printBarcodeLabels({ ...labelJob, copies: labelCount })
+      setLabelError('')
+    } catch (err) {
+      setLabelError(err.message)
+    }
+  }
+
   const unitPrice = Number(form.salePrice) > 0 && Number(form.unitQty) > 0
     ? (Number(form.salePrice) / Number(form.unitQty)).toFixed(2)
     : ''
@@ -465,6 +502,9 @@ export default function ProductsPage() {
                         <td>{p.stockQuantity}</td>
                         <td>%{p.vatRate}</td>
                         <td>
+                          <button type="button" className="row-edit" onClick={() => openLabels(p)}>
+                            <Barcode className="w-3.5 h-3.5" /> Barkod
+                          </button>
                           <button type="button" className="row-edit" onClick={() => openEdit(p)}>
                             <Pencil className="w-3.5 h-3.5" /> Düzenle
                           </button>
@@ -623,6 +663,7 @@ export default function ProductsPage() {
                     <div className="flex items-center gap-3">
                       <button type="button" className="linkish text-emerald-400" onClick={lookupBarcode}>Sorgula</button>
                       <button type="button" className="linkish text-purple-400" onClick={randomBarcode}>Rastgele Üret</button>
+                      <button type="button" className="linkish text-sky-300" onClick={() => openLabels(form)}>Barkod Yazdır</button>
                     </div>
                   </div>
                   <input
@@ -845,6 +886,41 @@ export default function ProductsPage() {
                 <button type="submit" className="save">Kaydet</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {labelJob && (
+        <div className="fixed inset-0 z-[80] bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white text-slate-900 rounded-3xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black">Barkod yazdır</h3>
+                <p className="text-sm text-slate-500">{labelJob.name}</p>
+              </div>
+              <button type="button" onClick={() => setLabelJob(null)} className="text-slate-500" aria-label="Kapat"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="rounded-2xl border border-slate-200 p-3 text-center">
+              <div className="text-xs font-bold truncate">{labelJob.name}</div>
+              <div className="my-1 [&>svg]:w-full [&>svg]:h-16" dangerouslySetInnerHTML={{ __html: code128Svg(labelJob.barcode) }} />
+              <div className="font-mono text-xs">{labelJob.barcode}</div>
+              <div className="text-sm font-black">{Number(labelJob.price || 0).toFixed(2)} TL</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={labelSettings.mode === 'a4' && labelSettings.cols === 5 && labelSettings.rows === 5 ? 'primary' : ''} onClick={() => chooseLabelLayout({ mode: 'a4', cols: 5, rows: 5 })}>A4 · 25</button>
+              <button type="button" className={labelSettings.mode === 'a4' && labelSettings.cols === 5 && labelSettings.rows === 6 ? 'primary' : ''} onClick={() => chooseLabelLayout({ mode: 'a4', cols: 5, rows: 6 })}>A4 · 30</button>
+              <button type="button" className={labelSettings.mode === 'label' ? 'primary' : ''} onClick={() => chooseLabelLayout({ mode: 'label' })}>Etiket {labelSettings.labelWidth}×{labelSettings.labelHeight} mm</button>
+            </div>
+            <p className="text-xs text-slate-500">Ölçüyü Sistem Ayarları → Barkod Etiketi ekranından değiştirirsin. Seçim bu bilgisayarda kalır.</p>
+            <label className="block text-xs font-semibold text-slate-600">
+              Adet
+              <input type="number" min="1" max="500" value={labelCount} onChange={(e) => setLabelCount(e.target.value)} className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 text-sm" />
+            </label>
+            {labelError && <p className="text-sm text-rose-600">{labelError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setLabelJob(null)} className="flex-1 py-3 rounded-xl border border-slate-300 font-bold">Vazgeç</button>
+              <button type="button" className="primary flex-1 py-3 rounded-xl font-black" onClick={printLabels}>Yazdır</button>
+            </div>
           </div>
         </div>
       )}
