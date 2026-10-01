@@ -6,12 +6,23 @@ import { useAuth } from '../auth'
 import DatabaseServerPanel from './DatabaseServerPanel'
 import { ThemeToggle } from '../theme'
 
+const LOGIN_KEY = 'hizlisatis_login'
+
+function readSavedLogin() {
+  try {
+    return JSON.parse(localStorage.getItem(LOGIN_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
 export default function LoginPage() {
   const { login, session } = useAuth()
   const navigate = useNavigate()
+  const saved = readSavedLogin()
   const [mode, setMode] = useState('tenant')
-  const [firmaKodu, setFirmaKodu] = useState('')
-  const [username, setUsername] = useState('')
+  const [firmaKodu, setFirmaKodu] = useState(saved.firmaKodu || '')
+  const [username, setUsername] = useState(saved.username || '')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -31,6 +42,13 @@ export default function LoginPage() {
     else if (session?.role === 'TenantUser') navigate('/app')
   }, [session, navigate])
 
+  function remember(nextFirma = firmaKodu, nextUser = username) {
+    localStorage.setItem(LOGIN_KEY, JSON.stringify({
+      firmaKodu: String(nextFirma || '').trim(),
+      username: String(nextUser || '').trim()
+    }))
+  }
+
   async function submit(e) {
     e.preventDefault()
     setError('')
@@ -38,6 +56,7 @@ export default function LoginPage() {
     try {
       const path = mode === 'admin' ? '/api/auth/platform-login' : '/api/auth/tenant-login'
       const body = mode === 'admin' ? { username, password } : { firmaKodu, username, password }
+      remember()
       const data = await api(path, { method: 'POST', body })
       login({
         token: data.token,
@@ -91,7 +110,7 @@ export default function LoginPage() {
               <label className="text-xs font-semibold text-slate-300 block mb-1.5">Firma Kodu</label>
               <div className="relative">
                 <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                <input value={firmaKodu} onChange={(e) => setFirmaKodu(e.target.value.toUpperCase())} className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
+                <input name="firmaKodu" autoComplete="organization" value={firmaKodu} onChange={(e) => { const next = e.target.value.toUpperCase(); setFirmaKodu(next); remember(next, username) }} className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
               </div>
             </div>
           )}
@@ -99,14 +118,14 @@ export default function LoginPage() {
             <label className="text-xs font-semibold text-slate-300 block mb-1.5">Kullanıcı Adı</label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-              <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
+              <input name="username" autoComplete="username" value={username} onChange={(e) => { setUsername(e.target.value); remember(firmaKodu, e.target.value) }} className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
             </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-300 block mb-1.5">Şifre</label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
+              <input name="password" autoComplete="current-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-emerald-500" required />
             </div>
           </div>
           <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2">
