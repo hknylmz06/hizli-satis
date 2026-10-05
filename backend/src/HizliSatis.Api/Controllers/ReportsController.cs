@@ -239,6 +239,96 @@ public class ReportsController(TenantDbContextFactory tenantDbFactory) : Control
         });
     }
 
+    [HttpGet("receipts")]
+    public async Task<IActionResult> Receipts([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? cashier, [FromQuery] string? q, CancellationToken ct)
+    {
+        var (start, end, _, _) = Range(from, to);
+        await using var db = tenantDbFactory.Create();
+        await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
+
+        var inRange = db.Sales.AsNoTracking().Where(s => s.SoldAt >= start && s.SoldAt < end);
+        var cashierNames = await db.Users.AsNoTracking()
+            .Select(u => new { u.Username, u.DisplayName })
+            .ToListAsync(ct);
+        var names = cashierNames.ToDictionary(
+            u => u.Username,
+            u => string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
+            StringComparer.OrdinalIgnoreCase);
+        var people = await inRange
+            .Where(s => s.CashierUsername != null && s.CashierUsername != "")
+            .Select(s => s.CashierUsername!)
+            .Distinct()
+            .ToListAsync(ct);
+
+        var query = inRange;
+        if (!string.IsNullOrWhiteSpace(cashier))
+        {
+            var who = cashier.Trim();
+            query = query.Where(s => s.CashierUsername == who);
+        }
+        var needle = q?.Trim();
+        if (!string.IsNullOrWhiteSpace(needle))
+            query = query.Where(s => s.ReceiptNo.Contains(needle) || (s.Customer != null && s.Customer.Name.Contains(needle)));
+
+        var rows = await query
+            .OrderByDescending(s => s.SoldAt)
+            .Take(500)
+            .Select(s => new
+            {
+                s.Id,
+                s.ReceiptNo,
+                s.SoldAt,
+                s.CashierUsername,
+                Customer = s.Customer != null ? s.Customer.Name : null,
+                s.PaymentMethod,
+                s.SubTotal,
+                s.VatTotal,
+                s.GrandTotal,
+                s.CostTotal,
+                s.CashAmount,
+                s.CardAmount,
+                Items = s.Items.Select(i => new { i.ProductName, i.Quantity, i.LineTotal })
+            })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            shown = rows.Count,
+            limited = rows.Count == 500,
+            cashiers = people
+                .OrderBy(username => names.TryGetValue(username, out var name) ? name : username)
+                .Select(username => new
+                {
+                    username,
+                    name = names.TryGetValue(username, out var name) ? name : username
+                }),
+            receipts = rows.Select(s =>
+            {
+                var discount = Math.Round(Math.Max(0, s.SubTotal + s.VatTotal - s.GrandTotal), 2);
+                var cashierName = s.CashierUsername != null && names.TryGetValue(s.CashierUsername, out var name)
+                    ? name
+                    : (s.CashierUsername ?? "");
+                return new
+                {
+                    s.Id,
+                    s.ReceiptNo,
+                    s.SoldAt,
+                    cashier = s.CashierUsername ?? "",
+                    cashierName,
+                    customer = string.IsNullOrWhiteSpace(s.Customer) ? "Perakende" : s.Customer,
+                    payment = MethodName(s.PaymentMethod),
+                    itemCount = s.Items.Count(),
+                    discount,
+                    grandTotal = s.GrandTotal,
+                    profit = Math.Round(s.GrandTotal - s.CostTotal, 2),
+                    s.CashAmount,
+                    s.CardAmount,
+                    items = s.Items.Select(i => new { name = i.ProductName, qty = i.Quantity, total = i.LineTotal })
+                };
+            })
+        });
+    }
+
     [HttpGet("stock")]
     public async Task<IActionResult> Stock([FromQuery] string? filter, [FromQuery] string? q, [FromQuery] int take = 200, CancellationToken ct = default)
     {
