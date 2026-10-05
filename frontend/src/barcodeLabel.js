@@ -21,7 +21,13 @@ export const barcodeLabelDefaults = {
   labelWidth: 40,
   labelHeight: 30,
   showName: true,
-  showPrice: true
+  showPrice: true,
+  showUnit: true,
+  showUnitPrice: true,
+  showDomestic: true,
+  showOrigin: true,
+  showPriceDate: true,
+  showCompany: true
 }
 
 function clamp(value, min, max, fallback) {
@@ -40,7 +46,13 @@ export function readBarcodeLabelSettings() {
       labelWidth: clamp(raw.labelWidth, 20, 120, barcodeLabelDefaults.labelWidth),
       labelHeight: clamp(raw.labelHeight, 12, 160, barcodeLabelDefaults.labelHeight),
       showName: raw.showName !== false,
-      showPrice: raw.showPrice !== false
+      showPrice: raw.showPrice !== false,
+      showUnit: raw.showUnit !== false,
+      showUnitPrice: raw.showUnitPrice !== false,
+      showDomestic: raw.showDomestic !== false,
+      showOrigin: raw.showOrigin !== false,
+      showPriceDate: raw.showPriceDate !== false,
+      showCompany: raw.showCompany !== false
     }
   } catch {
     return { ...barcodeLabelDefaults }
@@ -95,10 +107,53 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;')
 }
 
+function labelDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })
+}
+
+function money(value) {
+  return Number(value || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function packSize(job) {
+  const qty = Number(job.unitQty)
+  if (!Number.isFinite(qty) || qty <= 0) return ''
+  const type = String(job.unitType || '').trim()
+  const text = Number.isInteger(qty) ? String(qty) : String(qty)
+  return `${text}${type}`
+}
+
+function unitPriceLine(job) {
+  const qty = Number(job.unitQty)
+  const price = Number(job.price)
+  if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price)) return ''
+  const type = String(job.unitType || '').trim()
+  return `KDV Dahildir Birim Fiyat:${money(price / qty)} ₺${type ? `/ ${type}` : ''}`
+}
+
 function labelMarkup(job, settings) {
-  const name = settings.showName ? `<div class="name">${escapeHtml(job.name)}</div>` : ''
-  const price = settings.showPrice ? `<div class="price">${Number(job.price || 0).toFixed(2)} TL</div>` : ''
-  return `<div class="label">${name}${code128Svg(job.barcode)}<div class="code">${escapeHtml(job.barcode)}</div>${price}</div>`
+  const name = settings.showName ? `<div class="name">${escapeHtml(job.name)}</div>` : '<div class="name"></div>'
+  const badge = settings.showDomestic && job.isDomestic
+    ? '<div class="badge"><span>YERLİ</span><span>ÜRETİM</span></div>'
+    : ''
+  const size = settings.showUnit ? packSize(job) : ''
+  const qty = size ? `<div class="qty">${escapeHtml(size)}</div>` : ''
+  const price = settings.showPrice ? `<div class="price">${money(job.price)}₺</div>` : ''
+  const unitPrice = settings.showUnitPrice ? unitPriceLine(job) : ''
+  const changed = settings.showPriceDate ? labelDate(job.priceChangedAt) : ''
+  const left = [
+    unitPrice ? `<div>${escapeHtml(unitPrice)}</div>` : '',
+    changed ? `<div>Fiyat Değişiklik Tarihi ${escapeHtml(changed)}</div>` : ''
+  ].join('')
+  const right = [
+    settings.showOrigin && job.origin ? `<div>Menşei : ${escapeHtml(job.origin)}</div>` : '',
+    settings.showCompany && job.company ? `<div class="company">${escapeHtml(job.company)}</div>` : ''
+  ].join('')
+  const foot = (left || right) ? `<div class="foot"><div class="foot-l">${left}</div><div class="foot-r">${right}</div></div>` : ''
+  return `<div class="label"><div class="top">${name}${badge}</div>${qty}<div class="mid"><div class="bars">${code128Svg(job.barcode)}<div class="code">${escapeHtml(job.barcode)}</div></div>${price}</div>${foot}</div>`
 }
 
 export function printBarcodeLabels(jobs, mode) {
@@ -108,7 +163,13 @@ export function printBarcodeLabels(jobs, mode) {
     .map((job) => ({
       name: job?.name || '',
       barcode: String(job?.barcode || '').trim(),
-      price: job?.price
+      price: job?.price,
+      origin: job?.origin || '',
+      priceChangedAt: job?.priceChangedAt || '',
+      company: job?.company || '',
+      unitQty: job?.unitQty,
+      unitType: job?.unitType || '',
+      isDomestic: job?.isDomestic !== false
     }))
     .filter((job) => job.barcode)
   if (!list.length) throw new Error('Basılacak barkodlu kart seç.')
@@ -120,22 +181,33 @@ export function printBarcodeLabels(jobs, mode) {
   const css = settings.mode === 'label'
     ? `@page { size: ${settings.labelWidth}mm ${settings.labelHeight}mm; margin: 1.2mm; }
        html, body { margin: 0; }
-       .label { height: ${Math.max(8, settings.labelHeight - 2.4)}mm; break-after: page; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
-       svg { width: 92%; height: ${Math.max(8, Math.round(settings.labelHeight * 0.42))}mm; }`
+       .label { height: ${Math.max(8, settings.labelHeight - 2.4)}mm; break-after: page; }
+       svg { height: ${Math.max(6, Math.round(settings.labelHeight * 0.28))}mm; }`
     : `@page { size: A4 portrait; margin: 8mm; }
        html, body { margin: 0; }
        .sheet { display: grid; grid-template-columns: repeat(${settings.cols}, 1fr); grid-auto-rows: ${Math.floor(275 / settings.rows)}mm; width: 194mm; break-after: page; align-content: start; }
-       .label { border: 0.15mm dashed #cbd5e1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; padding: 1mm; }
-       svg { width: 90%; height: 14mm; }`
+       .label { border: 0.15mm dashed #cbd5e1; }
+       svg { height: 8mm; }`
   const body = settings.mode === 'label'
     ? labels.join('')
     : chunk(labels, perSheet).map((page) => `<section class="sheet">${page.join('')}</section>`).join('')
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Barkod</title><style>
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; color: #000; background: #fff; }
-    .name { font-size: 8pt; font-weight: 700; line-height: 1.15; max-height: 2.3em; overflow: hidden; width: 100%; }
-    .code { font-size: 7pt; font-family: Consolas, monospace; letter-spacing: 0.4px; }
-    .price { font-size: 9pt; font-weight: 800; }
+    .label { display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 0.6mm 1mm; text-align: left; }
+    .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1mm; }
+    .name { flex: 1; font-size: 7.5pt; font-weight: 800; line-height: 1.05; text-transform: uppercase; max-height: 2.2em; overflow: hidden; }
+    .badge { flex: 0 0 auto; border: 0.25mm solid #c81e1e; color: #c81e1e; font-size: 4.5pt; font-weight: 900; line-height: 1.05; text-align: center; padding: 0.3mm 0.5mm; }
+    .badge span { display: block; }
+    .qty { font-size: 6.5pt; font-weight: 700; line-height: 1; }
+    .mid { display: flex; align-items: center; justify-content: space-between; gap: 1mm; }
+    .bars { flex: 1; min-width: 0; }
+    .bars svg { width: 100%; display: block; }
+    .code { font-size: 6pt; font-family: Consolas, monospace; letter-spacing: 0.3px; text-align: center; }
+    .price { font-size: ${settings.mode === 'label' ? Math.min(22, Math.max(12, Math.round(settings.labelWidth / 4.5))) : 11}pt; font-weight: 900; white-space: nowrap; line-height: 1; }
+    .foot { display: flex; justify-content: space-between; gap: 1mm; font-size: 5pt; line-height: 1.15; }
+    .foot-r { text-align: right; }
+    .company { font-weight: 800; text-transform: uppercase; }
     ${css}
   </style></head><body>${body}</body></html>`
 

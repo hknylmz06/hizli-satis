@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api'
 import { useAuth } from '../auth'
 
@@ -236,8 +236,46 @@ const TABS = [
   { id: 'stok', title: 'Stok' },
   { id: 'urun', title: 'Ürün satış' },
   { id: 'kategori', title: 'Kategori' },
-  { id: 'saat', title: 'Yoğunluk' }
+  { id: 'saat', title: 'Yoğunluk' },
+  { id: 'fis', title: 'Fişler' }
 ]
+
+function whenText(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function qtyText(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return ''
+  return Number.isInteger(number) ? String(number) : String(Math.round(number * 1000) / 1000)
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+function downloadReceiptCsv(rows) {
+  const header = ['Fiş no', 'Tarih', 'Kasiyer', 'Müşteri', 'Ödeme', 'Kalem', 'İskonto', 'Toplam', 'Net kâr']
+  const body = rows.map((row) => [
+    row.receiptNo,
+    whenText(row.soldAt),
+    row.cashierName || row.cashier,
+    row.customer,
+    row.payment,
+    row.itemCount,
+    Number(row.discount || 0).toFixed(2),
+    Number(row.grandTotal || 0).toFixed(2),
+    Number(row.profit || 0).toFixed(2)
+  ].map(csvCell).join(';'))
+  const blob = new Blob([`\uFEFF${[header.map(csvCell).join(';'), ...body].join('\n')}`], { type: 'text/csv;charset=utf-8' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = 'fis-raporu.csv'
+  link.click()
+  URL.revokeObjectURL(link.href)
+}
 
 function Bars({ rows, label, value, tone = 'bg-emerald-500' }) {
   const max = Math.max(1, ...rows.map((row) => Number(value(row)) || 0))
@@ -283,6 +321,16 @@ export default function ReportsPage() {
   const [karTo, setKarTo] = useState(() => resolveKar('month').kpiTo)
   const [karPack, setKarPack] = useState(null)
   const [karError, setKarError] = useState('')
+  const [slips, setSlips] = useState(null)
+  const [slipError, setSlipError] = useState('')
+  const [slipCashier, setSlipCashier] = useState('')
+  const [slipQuery, setSlipQuery] = useState('')
+  const [openSlipId, setOpenSlipId] = useState(null)
+  const [infoSlip, setInfoSlip] = useState(null)
+  const [infoPrinting, setInfoPrinting] = useState(false)
+  const [infoPrintError, setInfoPrintError] = useState('')
+  const [slipProfile, setSlipProfile] = useState(null)
+  const [agentBase, setAgentBase] = useState('http://127.0.0.1:5055')
 
   async function load(start = from, end = to) {
     setError('')
@@ -321,11 +369,88 @@ export default function ReportsPage() {
     loadStock(stockFilter, stockQuery).catch((err) => setStockError(err.message))
   }, [tab, stockFilter, session.token])
 
+  async function loadSlips(start = from, end = to, person = slipCashier, query = slipQuery) {
+    setSlipError('')
+    const params = new URLSearchParams({ from: start, to: end, cashier: person, q: query.trim() })
+    const data = await api(`/api/reports/receipts?${params}`, { token: session.token })
+    setSlips(data)
+    setOpenSlipId(null)
+  }
+
+  useEffect(() => {
+    if (tab !== 'fis') return
+    loadSlips(from, to, slipCashier, slipQuery).catch((err) => setSlipError(err.message))
+    if (slipProfile) return
+    Promise.all([
+      api('/api/settings/extra', { token: session.token }),
+      api('/api/fiscal/settings', { token: session.token }).catch(() => null)
+    ]).then(([extra, fiscal]) => {
+      setSlipProfile(extra)
+      setAgentBase(fiscal?.agentBaseUrl || 'http://127.0.0.1:5055')
+    }).catch(() => {})
+  }, [tab, session.token])
+
+  function openInfoSlip(row) {
+    setInfoPrintError('')
+    setInfoSlip({
+      receiptNo: row.receiptNo,
+      when: whenText(row.soldAt),
+      payment: row.payment,
+      grandTotal: row.grandTotal,
+      cashAmount: row.cashAmount,
+      cardAmount: row.cardAmount,
+      lines: (row.items || []).map((item) => ({
+        name: item.name,
+        qty: qtyText(item.qty),
+        total: Number(item.total || 0).toFixed(2)
+      })),
+      ...(slipProfile || {})
+    })
+  }
+
+  async function sendInfoReceipt(slip) {
+    const base = (agentBase || 'http://127.0.0.1:5055').replace(/\/$/, '')
+    setInfoPrinting(true)
+    setInfoPrintError('')
+    try {
+      const health = await fetch(`${base}/health`, { cache: 'no-store' }).then((res) => res.ok ? res.json() : null).catch(() => null)
+      if (!health) throw new Error('Yazıcı servisi kapalı. Sistem ayarlarından Ajanı indir, zip’i aç, Kur dosyasına bas.')
+      if (!health.receipt) throw new Error('Kasada eski yazıcı servisi açık. Ajanı indir, zip’i aç, Kur’a bas.')
+      const res = await fetch(`${base}/receipt/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: slip.profile?.infoPrinterName || slip.infoPrinterName || '',
+          paper: slip.infoPaper || '80',
+          receiptNo: slip.receiptNo,
+          when: slip.when,
+          payment: slip.payment,
+          storeName: slip.companyName || '',
+          address: slip.companyAddress || '',
+          phone: slip.companyPhone || '',
+          taxOffice: slip.companyTaxOffice || '',
+          taxNo: slip.companyTaxNo || '',
+          footer: slip.receiptFooter || '',
+          grandTotal: Number(slip.grandTotal) || 0,
+          cashAmount: Number(slip.cashAmount) || 0,
+          cardAmount: Number(slip.cardAmount) || 0,
+          lines: slip.lines
+        })
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || data?.ok === false) throw new Error(data?.message || 'Fiş yazıcıya gidemedi. Kasada yazıcı servisi açık olsun.')
+    } catch (err) {
+      setInfoPrintError(err.message || 'Fiş yazıcıya gidemedi.')
+    } finally {
+      setInfoPrinting(false)
+    }
+  }
+
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div className="panel">
         <h1 className="mb-1">Raporlar</h1>
-        <p className="muted">Kasa, kâr, stok ve satış dağılımı.</p>
+        <p className="muted">Kasa, kâr, stok, fiş listesi ve satış dağılımı.</p>
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -679,6 +804,94 @@ export default function ReportsPage() {
             </div>
           )}
 
+          {tab === 'fis' && (
+            <div className="space-y-4">
+              <DateBar from={from} to={to} onFrom={setFrom} onTo={setTo} onApply={(start, end) => loadSlips(start, end).catch((err) => setSlipError(err.message))} />
+              <div className="panel flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+                <div>
+                  <h2>Satış ve fiş listesi</h2>
+                  <p className="muted">Fişe tıklayınca satılan ürünler açılır. Bilgi fişi, kasadaki yazıcıdan yeniden basılır.</p>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="w-44">Kasiyer
+                    <select value={slipCashier} onChange={(e) => { const value = e.target.value; setSlipCashier(value); loadSlips(from, to, value, slipQuery).catch((err) => setSlipError(err.message)) }}>
+                      <option value="">Tüm kasiyerler</option>
+                      {(slips?.cashiers || []).map((row) => <option key={row.username} value={row.username}>{row.name}</option>)}
+                    </select>
+                  </label>
+                  <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); loadSlips().catch((err) => setSlipError(err.message)) }}>
+                    <label className="w-52">Ara
+                      <input value={slipQuery} onChange={(e) => setSlipQuery(e.target.value)} placeholder="Fiş no, müşteri" />
+                    </label>
+                    <button className="primary" type="submit">Ara</button>
+                  </form>
+                  <button type="button" className="ghost" onClick={() => downloadReceiptCsv(slips?.receipts || [])}>CSV indir</button>
+                </div>
+              </div>
+              {slipError && <p className="error">{slipError}</p>}
+              {slips?.limited && <p className="muted">Bu aralıkta ilk 500 fiş gösteriliyor. Tarihi daraltırsan kalanlar da gelir.</p>}
+              <section className="panel overflow-x-auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fiş no</th>
+                      <th>Tarih</th>
+                      <th>Kasiyer</th>
+                      <th>Müşteri</th>
+                      <th>Ödeme</th>
+                      <th>Kalem</th>
+                      <th>İskonto</th>
+                      <th>Toplam</th>
+                      <th>Net kâr</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!slips && !slipError ? (
+                      <tr><td colSpan="10" className="text-slate-500">Yükleniyor...</td></tr>
+                    ) : (slips?.receipts || []).length === 0 ? (
+                      <tr><td colSpan="10" className="text-slate-500">Seçilen filtrelerde satış kaydı bulunamadı.</td></tr>
+                    ) : (slips.receipts || []).map((row) => (
+                      <Fragment key={row.id}>
+                        <tr>
+                          <td className="font-mono font-bold text-white">{row.receiptNo}</td>
+                          <td className="font-mono whitespace-nowrap">{whenText(row.soldAt)}</td>
+                          <td>{row.cashierName || row.cashier || '-'}</td>
+                          <td>{row.customer}</td>
+                          <td>{row.payment}</td>
+                          <td className="font-mono">{row.itemCount}</td>
+                          <td className="font-mono">{money(row.discount)}</td>
+                          <td className="font-mono">{money(row.grandTotal)}</td>
+                          <td className="font-mono text-emerald-300">{money(row.profit)}</td>
+                          <td className="whitespace-nowrap">
+                            <button type="button" className="ghost mr-2" onClick={() => setOpenSlipId(openSlipId === row.id ? null : row.id)}>{openSlipId === row.id ? 'Gizle' : 'Ürünler'}</button>
+                            <button type="button" className="primary" onClick={() => openInfoSlip(row)}>Bilgi fişi</button>
+                          </td>
+                        </tr>
+                        {openSlipId === row.id && (
+                          <tr key={`${row.id}-lines`}>
+                            <td colSpan="10" className="bg-slate-950/50">
+                              {(row.items || []).length === 0 ? <span className="text-slate-500">Bu fişte kalem yok.</span> : (
+                                <div className="space-y-1 py-1">
+                                  {(row.items || []).map((item, index) => (
+                                    <div key={`${row.id}-${index}`} className="flex justify-between gap-3 text-sm">
+                                      <span>{qtyText(item.qty)} x {item.name}</span>
+                                      <span className="font-mono">{money(item.total)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            </div>
+          )}
+
           {tab === 'saat' && (() => {
             const hours = report.hours || []
             const days = (report.kar?.days || []).filter((day) => Number(day.count) > 0)
@@ -733,6 +946,45 @@ export default function ReportsPage() {
             )
           })()}
         </>
+      )}
+
+      {infoSlip && (
+        <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white text-slate-900 rounded-3xl p-5 space-y-3 shadow-2xl">
+            <div className="text-center">
+              <div className="text-lg font-black">{infoSlip.companyName || 'Bilgi Fişi'}</div>
+              {infoSlip.companyAddress && <div className="text-xs text-slate-500 whitespace-pre-line">{infoSlip.companyAddress}</div>}
+              {infoSlip.companyPhone && <div className="text-xs text-slate-500">{infoSlip.companyPhone}</div>}
+              {(infoSlip.companyTaxOffice || infoSlip.companyTaxNo) && (
+                <div className="text-xs text-slate-500">{[infoSlip.companyTaxOffice, infoSlip.companyTaxNo].filter(Boolean).join(' ')}</div>
+              )}
+              <div className="text-xs text-slate-500">{infoSlip.when}</div>
+              <div className="text-xs font-mono text-slate-500">{infoSlip.receiptNo}</div>
+            </div>
+            <div className="border-t border-dashed border-slate-300 pt-2 space-y-1 max-h-64 overflow-y-auto">
+              {infoSlip.lines.map((line, index) => (
+                <div key={`${line.name}-${index}`} className="flex justify-between gap-3 text-sm">
+                  <span>{line.qty} x {line.name}</span>
+                  <span className="font-mono shrink-0">{line.total} TL</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-slate-200 pt-2 flex justify-between font-black">
+              <span>{infoSlip.payment}</span>
+              <span>{Number(infoSlip.grandTotal).toFixed(2)} TL</span>
+            </div>
+            {infoSlip.payment === 'Parçalı' && (
+              <div className="text-xs text-slate-500">Nakit {Number(infoSlip.cashAmount).toFixed(2)} · Kart {Number(infoSlip.cardAmount).toFixed(2)}</div>
+            )}
+            {infoSlip.receiptFooter && <p className="text-xs text-center text-slate-600 whitespace-pre-line">{infoSlip.receiptFooter}</p>}
+            <p className="text-[11px] text-center text-slate-400">Mali değeri yoktur. Yazdırma penceresi açılmaz.</p>
+            {infoPrintError && <p className="text-sm text-rose-600">{infoPrintError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setInfoSlip(null)} className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-700 font-bold">Kapat</button>
+              <button type="button" disabled={infoPrinting} onClick={() => sendInfoReceipt(infoSlip)} className="primary flex-1 py-3 rounded-xl font-black disabled:opacity-50">{infoPrinting ? 'Basılıyor...' : 'Yazdır'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
