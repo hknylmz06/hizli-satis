@@ -669,7 +669,7 @@ export default function QuickSalePage() {
     return res.json().catch(() => null)
   }
 
-  async function printFiscalReceipt(cartSnapshot, payMethod, payable, split) {
+  async function printFiscalReceipt(cartSnapshot, payMethod, payable, split, discountAmount) {
     if (!fiscalReady()) return { skipped: true }
     if (!isS1Device()) {
       try {
@@ -685,7 +685,7 @@ export default function QuickSalePage() {
             vatRate: item.vatRate ?? 20
           })),
           payments,
-          discountAmount: 0,
+          discountAmount: Math.round(Number(discountAmount || 0) * 100) / 100,
           notes: 'POS Satış'
         }
         let data = await postBridge('/api/sale', saleBody)
@@ -976,7 +976,7 @@ export default function QuickSalePage() {
         setFiscalWait(cardWait
           ? 'Kartı yazarkasadan okutun. Onay ve fiş bitene kadar bu uyarı ekranda kalır.'
           : 'Fiş yazarkasadan çıkıyor. Bitene kadar bu uyarı ekranda kalır.')
-        const fiscalResult = await printFiscalReceipt(cartSnapshot, payMethod, payable, split)
+        const fiscalResult = await printFiscalReceipt(cartSnapshot, payMethod, payable, split, discountAmount)
         if (fiscalResult?.paper) {
           setPaperModal({
             message: fiscalResult.message,
