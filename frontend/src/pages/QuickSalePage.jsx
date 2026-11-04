@@ -58,6 +58,39 @@ const WEIGHT_PRESETS = [
   { label: '5 Kg', gram: 5000, kg: 5 }
 ]
 
+function CustomerPick({ customers, customerId, query, onQuery, onPick }) {
+  const needle = query.trim().toLocaleLowerCase('tr-TR')
+  const picked = customers.find((row) => String(row.id) === String(customerId))
+  const matches = customers.filter((row) => {
+    if (!needle) return true
+    const name = String(row.name || '').toLocaleLowerCase('tr-TR')
+    const phone = String(row.phone || '')
+    return name.includes(needle) || phone.includes(query.trim())
+  })
+  const shown = picked && !matches.some((row) => String(row.id) === String(picked.id)) ? [picked, ...matches] : matches
+
+  return (
+    <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-bold text-slate-300">Cari</span>
+        <span className="text-[11px] text-slate-500">Nakit ve kartta da seçilir</span>
+      </div>
+      <input
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        placeholder="İsim veya telefon ara"
+        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+      />
+      <select value={customerId} onChange={(e) => onPick(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white">
+        <option value="">Perakende</option>
+        {shown.map((row) => (
+          <option key={row.id} value={row.id}>{row.name}{row.phone ? ` · ${row.phone}` : ''}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export default function QuickSalePage() {
   const { session } = useAuth()
   const navigate = useNavigate()
@@ -69,6 +102,7 @@ export default function QuickSalePage() {
   const [query, setQuery] = useState('')
   const [customers, setCustomers] = useState([])
   const [customerId, setCustomerId] = useState('')
+  const [customerQuery, setCustomerQuery] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('Nakit')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -102,7 +136,6 @@ export default function QuickSalePage() {
   const [splitOpen, setSplitOpen] = useState(false)
   const [splitCash, setSplitCash] = useState('')
   const [deptAmount, setDeptAmount] = useState('')
-  const [askCustomer, setAskCustomer] = useState(false)
   const [shortcuts, setShortcuts] = useState(readLocalShortcuts)
   const [categories, setCategories] = useState([])
   const [categoryTabs, setCategoryTabs] = useState(() => {
@@ -190,6 +223,7 @@ export default function QuickSalePage() {
         receiptFooter: data.receiptFooter || ''
       })
     }).catch(() => setAskPosAccount(false))
+    api('/api/customers', { token: session.token }).then((rows) => setCustomers(Array.isArray(rows) ? rows : [])).catch(() => {})
     api('/api/accounts', { token: session.token }).then((rows) => {
       const list = (Array.isArray(rows) ? rows : []).filter((row) => row.type === 'pos')
       list.sort((a, b) => Number(a.id) - Number(b.id))
@@ -197,11 +231,6 @@ export default function QuickSalePage() {
     }).catch(() => setPosAccounts([]))
     inputRef.current?.focus()
   }, [session.token])
-
-  useEffect(() => {
-    if (!askCustomer || customers.length) return
-    api('/api/customers', { token: session.token }).then(setCustomers).catch(() => {})
-  }, [askCustomer, customers.length, session.token])
 
   function lineGross(item) {
     return Number(item.unitPrice) * Number(item.quantity)
@@ -762,7 +791,7 @@ export default function QuickSalePage() {
           ? { productId: null, quantity: item.quantity, unitPrice: item.unitPrice, name: item.name, vatRate: item.vatRate }
           : { productId: item.productId, variantId: item.variantId || null, quantity: item.quantity })),
         paymentMethod: payMethod,
-        customerId: payMethod === 'Veresiye' ? customerId || null : null,
+        customerId: customerId ? Number(customerId) : null,
         discountAmount,
         cashAmount: split?.cash ?? null,
         cardAmount: split?.card ?? null,
@@ -778,7 +807,11 @@ export default function QuickSalePage() {
     setBarcode('')
     setPaidAmount('')
     setDiscount('')
+    const soldCustomer = customers.find((row) => String(row.id) === String(customerId))
+    setCustomerId('')
+    setCustomerQuery('')
     let msg = `Satış tamam: ${result.receiptNo} — ${Number(result.grandTotal).toFixed(2)} ₺`
+    if (soldCustomer) msg += ` | ${soldCustomer.name}`
     if (payMethod === 'Parcali') msg += ` | Nakit ${money(result.cashAmount)} · POS ${money(result.cardAmount)}`
     if (payMethod !== 'Veresiye' && fiscal?.isEnabled && fiscal?.isPaired) msg += ' | Fiş basıldı'
     const posted = posAccounts.find((row) => Number(row.id) === Number(posAccountId)) || (cardSale(payMethod, split) ? posAccounts[0] : null)
@@ -789,6 +822,7 @@ export default function QuickSalePage() {
       receiptNo: result.receiptNo,
       when: new Date().toLocaleString('tr-TR'),
       payment: payMethod === 'KrediKarti' ? 'Kredi kartı' : payMethod === 'Parcali' ? 'Parçalı' : payMethod === 'Veresiye' ? 'Veresiye' : 'Nakit',
+      customerName: soldCustomer?.name || '',
       grandTotal: result.grandTotal,
       cashAmount: result.cashAmount,
       cardAmount: result.cardAmount,
@@ -939,8 +973,8 @@ export default function QuickSalePage() {
       return
     }
     if (payMethod === 'Veresiye' && !customerId) {
-      setAskCustomer(true)
-      setError('Veresiye için cari seçin.')
+      setPane('pay')
+      setError('Veresiye için cari seçin. Nakit ve kartta cari zorunlu değil.')
       return
     }
     setError('')
@@ -1294,6 +1328,13 @@ export default function QuickSalePage() {
       </div>
 
       <div className={`flex flex-col flex-1 min-h-0 min-w-0 gap-3 overflow-y-auto ${showPane('pay')} xl:flex-none xl:w-[420px] xl:max-w-[460px] xl:shrink-0 bg-slate-900/95 rounded-3xl border border-slate-800 p-3 sm:p-4`}>
+        <CustomerPick
+          customers={customers}
+          customerId={customerId}
+          query={customerQuery}
+          onQuery={setCustomerQuery}
+          onPick={(id) => { setCustomerId(id); setCustomerQuery('') }}
+        />
         <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-black text-sm"><ShoppingCart className="w-5 h-5 text-emerald-400" /> Satış Sepeti</div>
@@ -1361,16 +1402,6 @@ export default function QuickSalePage() {
           ))}
           <button type="button" onClick={() => setPaidAmount(total.toFixed(2))} className="py-3 rounded-2xl border border-emerald-500/50 bg-emerald-950 text-emerald-300 font-black text-xs">TAM</button>
         </div>
-
-        {askCustomer && (
-          <label className="text-[11px] text-slate-400">
-            Veresiye cari
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-2 text-sm text-white">
-              <option value="">Seçin</option>
-              {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
-            </select>
-          </label>
-        )}
 
         <div className="grid grid-cols-2 gap-2.5">
           <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('Nakit')} className="py-4 xl:py-7 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Banknote className="w-5 h-5 sm:w-6 sm:h-6" /> NAKİT</button>
@@ -1755,6 +1786,7 @@ export default function QuickSalePage() {
                 <div className="text-xs text-slate-500">{[infoSlip.companyTaxOffice, infoSlip.companyTaxNo].filter(Boolean).join(' ')}</div>
               )}
               <div className="text-xs text-slate-500">{infoSlip.when}</div>
+              {infoSlip.customerName && <div className="text-xs font-bold text-slate-700">{infoSlip.customerName}</div>}
               <div className="text-xs font-mono text-slate-500">{infoSlip.receiptNo}</div>
             </div>
             <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">

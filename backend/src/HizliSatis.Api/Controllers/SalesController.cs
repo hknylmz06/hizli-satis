@@ -292,6 +292,34 @@ public class SalesController(TenantDbContextFactory tenantDbFactory) : Controlle
         return Ok(new { voided = true, sale.ReceiptNo });
     }
 
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> Get(int id, CancellationToken ct)
+    {
+        await using var db = tenantDbFactory.Create();
+        var sale = await db.Sales.AsNoTracking()
+            .Include(s => s.Items)
+            .FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (sale is null) return NotFound(new { message = "Satış bulunamadı." });
+
+        return Ok(new
+        {
+            sale.Id,
+            sale.ReceiptNo,
+            sale.SoldAt,
+            PaymentMethod = sale.PaymentMethod.ToString(),
+            sale.GrandTotal,
+            Items = sale.Items
+                .OrderBy(i => i.Id)
+                .Select(i => new
+                {
+                    i.ProductName,
+                    i.Quantity,
+                    i.UnitPrice,
+                    i.LineTotal
+                })
+        });
+    }
+
     [HttpGet("recent")]
     public async Task<IActionResult> Recent(CancellationToken ct)
     {
