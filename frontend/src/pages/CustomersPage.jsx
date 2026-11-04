@@ -287,9 +287,9 @@ export default function CustomersPage() {
                 ) : statement.transactions.map((row) => (
                   <tr key={row.id}>
                     <td className="font-mono text-xs">{new Date(row.createdAt).toLocaleString('tr-TR')}</td>
-                    <td>{row.type === 'sale' ? 'Veresiye satış' : row.type === 'debt' ? 'Manuel borç' : 'Ödeme alındı'}</td>
+                    <td>{row.type === 'sale' ? 'Veresiye satış' : row.type === 'paid' ? 'Peşin satış' : row.type === 'debt' ? 'Manuel borç' : 'Ödeme alındı'}</td>
                     <td>{row.note || '-'}{row.accountName ? ` · ${row.accountName}` : ''}</td>
-                    <td className={`font-mono ${row.type === 'payment' ? 'text-emerald-300' : 'text-amber-300'}`}>{row.type === 'payment' ? '-' : '+'}{money(row.amount)}</td>
+                    <td className={`font-mono ${row.type === 'payment' || row.type === 'paid' ? 'text-emerald-300' : 'text-amber-300'}`}>{row.type === 'payment' ? '-' : row.type === 'paid' ? '' : '+'}{money(row.amount)}</td>
                     <td className="font-mono">{money(row.runningBalance)}</td>
                   </tr>
                 ))}

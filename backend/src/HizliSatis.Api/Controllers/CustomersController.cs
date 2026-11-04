@@ -141,8 +141,8 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         if (customer is null) return NotFound(new { message = "Müşteri bulunamadı." });
 
         var sales = await db.Sales.AsNoTracking()
-            .Where(s => s.CustomerId == id && s.PaymentMethod == PaymentMethod.Veresiye)
-            .Select(s => new { s.Id, At = s.SoldAt, Kind = "sale", Amount = s.GrandTotal, Note = (string?)s.ReceiptNo })
+            .Where(s => s.CustomerId == id)
+            .Select(s => new { s.Id, At = s.SoldAt, s.PaymentMethod, Amount = s.GrandTotal, s.ReceiptNo })
             .ToListAsync(ct);
         var rows = await db.CustomerPayments.AsNoTracking()
             .Where(p => p.CustomerId == id)
@@ -150,7 +150,13 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
             .ToListAsync(ct);
 
         var accountNames = await db.CashAccounts.AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Name, ct);
-        var ordered = sales.Select(x => new Move(x.Id, x.At, x.Kind, x.Amount, x.Note, null))
+        var ordered = sales.Select(x => new Move(
+            x.Id,
+            x.At,
+            x.PaymentMethod == PaymentMethod.Veresiye ? "sale" : "paid",
+            x.Amount,
+            x.PaymentMethod == PaymentMethod.Veresiye ? x.ReceiptNo : $"{x.ReceiptNo} · {PayLabel(x.PaymentMethod)}",
+            null))
             .Concat(rows.Select(x => new Move(x.Id, x.At, x.Kind, x.Amount, x.Note, x.AccountId)))
             .OrderBy(x => x.At).ThenBy(x => x.Id)
             .ToList();
@@ -158,13 +164,13 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         var transactions = new List<object>();
         foreach (var move in ordered)
         {
-            var kind = move.Kind == "debt" ? "debt" : move.Kind == "sale" ? "sale" : "payment";
+            var kind = move.Kind == "debt" ? "debt" : move.Kind == "sale" ? "sale" : move.Kind == "paid" ? "paid" : "payment";
             if (kind == "payment")
             {
                 running -= move.Amount;
                 totalPayments += move.Amount;
             }
-            else
+            else if (kind != "paid")
             {
                 running += move.Amount;
                 if (kind == "sale") totalSales += move.Amount;
@@ -223,6 +229,14 @@ public class CustomersController(TenantDbContextFactory tenantDbFactory) : Contr
         await TenantSchemaEnsuring.EnsureDefinitionsAsync(db, ct);
         return db;
     }
+
+    private static string PayLabel(PaymentMethod method) => method switch
+    {
+        PaymentMethod.KrediKarti => "Kart",
+        PaymentMethod.Parcali => "Parçalı",
+        PaymentMethod.Veresiye => "Veresiye",
+        _ => "Nakit"
+    };
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
