@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { AlertCircle, ArrowDownRight, ArrowUpRight, CheckCircle, History, Plus, Search, X } from 'lucide-react'
 import { api } from '../api'
 import { useAuth } from '../auth'
 
 function money(value) {
   return `₺${Number(value || 0).toFixed(2)}`
+}
+
+function formatQty(value) {
+  const n = Number(value || 0)
+  if (!Number.isFinite(n)) return '0'
+  return Number.isInteger(n) ? String(n) : n.toLocaleString('tr-TR', { maximumFractionDigits: 3 })
 }
 
 const emptyForm = { name: '', phone: '', email: '', address: '', note: '', creditLimit: '' }
@@ -25,6 +31,7 @@ export default function CustomersPage() {
   const [debtAmount, setDebtAmount] = useState('')
   const [debtNote, setDebtNote] = useState('')
   const [statement, setStatement] = useState(null)
+  const [openSale, setOpenSale] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -113,9 +120,25 @@ export default function CustomersPage() {
     setError('')
     try {
       const data = await api(`/api/customers/${customer.id}/statement`, { token: session.token })
+      setOpenSale(null)
       setStatement(data)
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  async function toggleSale(row) {
+    if (row.type !== 'sale' && row.type !== 'paid') return
+    if (openSale?.id === row.id && openSale?.type === row.type) {
+      setOpenSale(null)
+      return
+    }
+    setOpenSale({ id: row.id, type: row.type, loading: true, items: [] })
+    try {
+      const data = await api(`/api/sales/${row.id}`, { token: session.token })
+      setOpenSale({ id: row.id, type: row.type, loading: false, items: data.items || [] })
+    } catch (err) {
+      setOpenSale({ id: row.id, type: row.type, loading: false, error: err.message, items: [] })
     }
   }
 
@@ -263,7 +286,7 @@ export default function CustomersPage() {
       )}
 
       {statement && (
-        <Modal title={`${statement.customer.name} ekstresi`} onClose={() => setStatement(null)} wide>
+        <Modal title={`${statement.customer.name} ekstresi`} onClose={() => { setStatement(null); setOpenSale(null) }} wide>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
             <Stat label="Veresiye satış" value={money(statement.summary.totalSales)} />
             <Stat label="Tahsilat" value={money(statement.summary.totalPayments)} />
@@ -284,15 +307,37 @@ export default function CustomersPage() {
               <tbody>
                 {statement.transactions.length === 0 ? (
                   <tr><td colSpan="5" className="text-slate-500">Hareket yok.</td></tr>
-                ) : statement.transactions.map((row) => (
-                  <tr key={row.id}>
-                    <td className="font-mono text-xs">{new Date(row.createdAt).toLocaleString('tr-TR')}</td>
-                    <td>{row.type === 'sale' ? 'Veresiye satış' : row.type === 'paid' ? 'Peşin satış' : row.type === 'debt' ? 'Manuel borç' : 'Ödeme alındı'}</td>
-                    <td>{row.note || '-'}{row.accountName ? ` · ${row.accountName}` : ''}</td>
-                    <td className={`font-mono ${row.type === 'payment' || row.type === 'paid' ? 'text-emerald-300' : 'text-amber-300'}`}>{row.type === 'payment' ? '-' : row.type === 'paid' ? '' : '+'}{money(row.amount)}</td>
-                    <td className="font-mono">{money(row.runningBalance)}</td>
-                  </tr>
-                ))}
+                ) : statement.transactions.map((row) => {
+                  const saleRow = row.type === 'sale' || row.type === 'paid'
+                  const opened = openSale?.id === row.id && openSale?.type === row.type
+                  return (
+                    <Fragment key={`${row.type}-${row.id}`}>
+                      <tr onClick={() => toggleSale(row)} className={saleRow ? 'cursor-pointer hover:bg-slate-800/60' : ''}>
+                        <td className="font-mono text-xs">{new Date(row.createdAt).toLocaleString('tr-TR')}</td>
+                        <td>{row.type === 'sale' ? 'Veresiye satış' : row.type === 'paid' ? 'Peşin satış' : row.type === 'debt' ? 'Manuel borç' : 'Ödeme alındı'}</td>
+                        <td>{row.note || '-'}{row.accountName ? ` · ${row.accountName}` : ''}{saleRow ? <span className="block text-[10px] text-slate-500">{opened ? 'Gizle' : 'Ürünleri görmek için bas'}</span> : null}</td>
+                        <td className={`font-mono ${row.type === 'payment' || row.type === 'paid' ? 'text-emerald-300' : 'text-amber-300'}`}>{row.type === 'payment' ? '-' : row.type === 'paid' ? '' : '+'}{money(row.amount)}</td>
+                        <td className="font-mono">{money(row.runningBalance)}</td>
+                      </tr>
+                      {opened && (
+                        <tr>
+                          <td colSpan="5" className="bg-slate-950/70">
+                            {openSale.loading ? <span className="text-slate-400">Ürünler yükleniyor...</span> : openSale.error ? <span className="text-red-300">{openSale.error}</span> : openSale.items.length === 0 ? <span className="text-slate-500">Bu fişte kalem yok.</span> : (
+                              <div className="space-y-1 py-1">
+                                {openSale.items.map((item, index) => (
+                                  <div key={`${item.productName}-${index}`} className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="min-w-0">{formatQty(item.quantity)} × {item.productName}</span>
+                                    <span className="font-mono shrink-0">{money(item.lineTotal)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
