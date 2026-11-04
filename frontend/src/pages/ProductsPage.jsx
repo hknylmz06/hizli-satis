@@ -485,7 +485,7 @@ export default function ProductsPage() {
 
           {tab === 'stock' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2>Stok kartları</h2>
                   <p className="muted">Barkod basmak için kartları işaretle. Her üründen bir etiket çıkar, aynı barkod çoğaltılmaz.</p>
@@ -497,7 +497,7 @@ export default function ProductsPage() {
                   <button className="primary" type="button" onClick={openNew}>Yeni Ürün Ekle</button>
                 </div>
               </div>
-              <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); load(1, stockQuery).catch((err) => setError(err.message)) }}>
+              <form className="flex flex-col sm:flex-row gap-2" onSubmit={(e) => { e.preventDefault(); load(1, stockQuery).catch((err) => setError(err.message)) }}>
                 <input value={stockQuery} onChange={(e) => setStockQuery(e.target.value)} placeholder="Ürün adı veya barkod ara" className="flex-1" />
                 <button type="submit" className="primary">Ara</button>
                 {stockQuery && (

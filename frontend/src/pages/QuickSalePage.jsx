@@ -92,6 +92,7 @@ export default function QuickSalePage() {
   const [okcBusy, setOkcBusy] = useState('')
   const [okcMsg, setOkcMsg] = useState('')
   const [middleTab, setMiddleTab] = useState('quick')
+  const [pane, setPane] = useState('sale')
   const [images, setImages] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pos-images') || '{}') } catch { return {} }
   })
@@ -669,7 +670,7 @@ export default function QuickSalePage() {
     return res.json().catch(() => null)
   }
 
-  async function printFiscalReceipt(cartSnapshot, payMethod, payable, split) {
+  async function printFiscalReceipt(cartSnapshot, payMethod, payable, split, discountAmount) {
     if (!fiscalReady()) return { skipped: true }
     if (!isS1Device()) {
       try {
@@ -685,7 +686,7 @@ export default function QuickSalePage() {
             vatRate: item.vatRate ?? 20
           })),
           payments,
-          discountAmount: 0,
+          discountAmount: Math.round(Number(discountAmount || 0) * 100) / 100,
           notes: 'POS Satış'
         }
         let data = await postBridge('/api/sale', saleBody)
@@ -976,7 +977,7 @@ export default function QuickSalePage() {
         setFiscalWait(cardWait
           ? 'Kartı yazarkasadan okutun. Onay ve fiş bitene kadar bu uyarı ekranda kalır.'
           : 'Fiş yazarkasadan çıkıyor. Bitene kadar bu uyarı ekranda kalır.')
-        const fiscalResult = await printFiscalReceipt(cartSnapshot, payMethod, payable, split)
+        const fiscalResult = await printFiscalReceipt(cartSnapshot, payMethod, payable, split, discountAmount)
         if (fiscalResult?.paper) {
           setPaperModal({
             message: fiscalResult.message,
@@ -1046,10 +1047,44 @@ export default function QuickSalePage() {
 
   const priceLook = autoFiscalReceipt && fiscal?.isEnabled && !fiscal?.isPaired
 
+  const showPane = (name) => (pane === name ? '' : 'max-xl:hidden')
+
   return (
-    <div className="h-screen p-3 flex gap-3 overflow-x-auto overflow-y-hidden bg-[#070b16] text-slate-100">
-      <div className="w-[380px] xl:w-[420px] shrink-0 flex flex-col bg-slate-900/90 rounded-3xl border border-slate-800 p-3 shadow-2xl min-h-0 relative z-20">
-        <div className="flex flex-wrap items-center gap-1.5 pb-2">
+    <div className="pos-shell h-full p-2 sm:p-3 flex flex-col gap-2 overflow-hidden bg-[#070b16] text-slate-100">
+      <div className="xl:hidden shrink-0 flex flex-wrap items-center gap-1.5">
+        <button type="button" onClick={() => navigate('/app')} className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl text-xs font-bold">
+          <LayoutDashboard className="w-4 h-4 text-blue-400" /> Menü
+        </button>
+        <button type="button" onClick={() => { setOkcOpen(true); setOkcMsg('') }} className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold border ${fiscal?.isPaired ? 'bg-emerald-950 text-emerald-300 border-emerald-500/70' : 'bg-rose-950 text-rose-300 border-rose-500/70'}`}>
+          <Cpu className="w-4 h-4" /> ÖKC
+        </button>
+        <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS</span>
+        <ThemeToggle className="shrink-0 p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
+      </div>
+
+      {priceLook && (
+        <div className={`pos-alert shrink-0 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'is-warn bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {fiscal?.needsAssignment
+            ? 'FİYAT GÖR MODU. Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
+            : 'Hata: Yazarkasa eşleşmedi. Satış yapamazsın.'}
+        </div>
+      )}
+      {error && (
+        <div className="pos-alert shrink-0 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
+          <span className="flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{error}</span>
+          <button type="button" onClick={() => setError('')}><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+      {message && (
+        <div className="pos-alert is-ok shrink-0 p-2 bg-emerald-950 border border-emerald-500/50 rounded-2xl text-emerald-100 text-[11px] flex items-center gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5 shrink-0" />{message}
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 flex flex-col xl:flex-row gap-2 sm:gap-3 overflow-hidden">
+      <div className={`flex flex-col flex-1 min-h-0 min-w-0 ${showPane('cart')} xl:flex-none xl:w-[380px] xl:max-w-[420px] xl:shrink-0 bg-slate-900/90 rounded-3xl border border-slate-800 p-3 shadow-2xl relative z-20`}>
+        <div className="hidden xl:flex flex-wrap items-center gap-1.5 pb-2">
           <button type="button" onClick={() => navigate('/app')} className="relative z-30 shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl text-xs font-bold cursor-pointer">
             <LayoutDashboard className="w-4 h-4 text-blue-400" /> Menü
           </button>
@@ -1063,14 +1098,6 @@ export default function QuickSalePage() {
           <span className="ml-auto text-[11px] font-mono font-bold text-slate-400">POS SATIŞ</span>
           <ThemeToggle className="shrink-0 p-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200" />
         </div>
-        {priceLook && (
-          <div className={`pos-alert mb-2 p-2 rounded-2xl text-[11px] font-bold flex items-center gap-2 ${fiscal?.needsAssignment ? 'is-warn bg-amber-950 border border-amber-500/60 text-amber-200' : 'bg-red-950 border border-red-500/70 text-red-100'}`}>
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {fiscal?.needsAssignment
-              ? 'FİYAT GÖR MODU. Satış yapamazsın. Bu kasiyere yazarkasa tanımlı değil.'
-              : 'Hata: Yazarkasa eşleşmedi. Satış yapamazsın.'}
-          </div>
-        )}
 
         <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 mb-2">
           {slots.map((slot, idx) => {
@@ -1093,18 +1120,6 @@ export default function QuickSalePage() {
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ürün Ara..." className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-2xl text-white text-xs outline-none" />
         </div>
-
-        {error && (
-          <div className="pos-alert mb-2 p-2 bg-red-950 border border-red-500/50 rounded-2xl text-red-100 text-[11px] flex justify-between gap-2">
-            <span className="flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{error}</span>
-            <button type="button" onClick={() => setError('')}><X className="w-3.5 h-3.5" /></button>
-          </div>
-        )}
-        {message && (
-          <div className="pos-alert is-ok mb-2 p-2 bg-emerald-950 border border-emerald-500/50 rounded-2xl text-emerald-100 text-[11px] flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5 shrink-0" />{message}
-          </div>
-        )}
 
         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
           <div className="flex items-center gap-1.5">
@@ -1161,7 +1176,7 @@ export default function QuickSalePage() {
         </div>
       </div>
 
-      <div className="flex-1 min-w-[320px] bg-slate-900/85 rounded-3xl border border-slate-800 p-3.5 overflow-hidden flex flex-col shadow-2xl">
+      <div className={`flex flex-col flex-1 min-h-0 min-w-0 ${showPane('sale')} bg-slate-900/85 rounded-3xl border border-slate-800 p-2.5 sm:p-3.5 overflow-hidden shadow-2xl`}>
         <div className="flex items-stretch gap-2 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800 mb-3">
           <button type="button" onClick={() => setMiddleTab('quick')} className={`flex-1 min-w-0 py-3 px-2 rounded-xl text-sm font-black flex items-center justify-center gap-2 text-center leading-tight ${middleTab === 'quick' ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-400'}`}>
             <Sparkles className="w-5 h-5 shrink-0 text-amber-300" /> <span>Hızlı Satış</span>
@@ -1195,12 +1210,12 @@ export default function QuickSalePage() {
                 <Plus className="w-3.5 h-3.5" /> Kategori
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5 content-start pr-1">
+            <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-2.5 content-start pr-1">
               {visible.map((product) => {
                 const image = productImage(product)
                 return (
-                  <div key={product.id} className="pos-tile rounded-2xl border border-slate-700 bg-slate-900 min-h-[176px] overflow-hidden flex flex-col">
-                    <div onClick={() => chooseProduct(product)} className={`pos-photo relative cursor-pointer ${image ? 'h-28 bg-slate-800' : 'h-16 px-2.5 flex items-center justify-between border-b border-slate-700 bg-slate-800'}`}>
+                  <div key={product.id} className="pos-tile rounded-2xl border border-slate-700 bg-slate-900 min-h-[132px] sm:min-h-[176px] overflow-hidden flex flex-col">
+                    <div onClick={() => chooseProduct(product)} className={`pos-photo relative cursor-pointer ${image ? 'h-20 sm:h-28 bg-slate-800' : 'h-14 sm:h-16 px-2.5 flex items-center justify-between border-b border-slate-700 bg-slate-800'}`}>
                       {image ? (
                         <img
                           src={image}
@@ -1252,7 +1267,7 @@ export default function QuickSalePage() {
           <div className="dept-pad flex-1 flex flex-col gap-3 bg-gradient-to-b from-[#0f0c29] via-[#1a1040] to-[#0d0b1e] p-4 rounded-3xl border border-indigo-500/40 min-h-0">
             <div className="flex items-center justify-between border-2 border-indigo-400/40 rounded-2xl px-4 py-3 bg-indigo-950/40">
               <span className="dept-caption text-xs font-black text-indigo-200 uppercase tracking-widest">Departman Tutar Girişi</span>
-              <span className="dept-amount text-4xl font-mono font-black text-white">{deptAmount ? `₺${deptAmount}` : '₺0'}</span>
+              <span className="dept-amount text-2xl sm:text-4xl font-mono font-black text-white">{deptAmount ? `₺${deptAmount}` : '₺0'}</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {departments.map((dept) => (
@@ -1278,7 +1293,7 @@ export default function QuickSalePage() {
         )}
       </div>
 
-      <div className="w-[420px] xl:w-[460px] shrink-0 bg-slate-900/95 rounded-3xl border border-slate-800 p-4 flex flex-col gap-3 overflow-y-auto">
+      <div className={`flex flex-col flex-1 min-h-0 min-w-0 gap-3 overflow-y-auto ${showPane('pay')} xl:flex-none xl:w-[420px] xl:max-w-[460px] xl:shrink-0 bg-slate-900/95 rounded-3xl border border-slate-800 p-3 sm:p-4`}>
         <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-black text-sm"><ShoppingCart className="w-5 h-5 text-emerald-400" /> Satış Sepeti</div>
@@ -1326,7 +1341,7 @@ export default function QuickSalePage() {
 
         <div className="bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 px-5 py-6 rounded-2xl border-2 border-emerald-500/80 shadow-[0_0_25px_rgba(16,185,129,0.25)]">
           <div className="flex items-center gap-2 text-emerald-300 text-sm font-black uppercase"><Wallet className="w-5 h-5" /> Ödenecek Tutar</div>
-          <div className="text-right text-5xl xl:text-6xl font-mono font-black text-emerald-300 leading-none mt-3">{money(total)}</div>
+          <div className="text-right text-4xl sm:text-5xl xl:text-6xl font-mono font-black text-emerald-300 leading-none mt-3">{money(total)}</div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -1340,7 +1355,7 @@ export default function QuickSalePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-6 gap-1.5">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
           {[10, 20, 50, 100, 200].map((amount) => (
             <button key={amount} type="button" onClick={() => addQuickMoney(amount)} className="py-3 rounded-2xl border border-slate-800 bg-slate-950 text-emerald-400 font-mono font-black text-xs">+₺{amount}</button>
           ))}
@@ -1358,15 +1373,29 @@ export default function QuickSalePage() {
         )}
 
         <div className="grid grid-cols-2 gap-2.5">
-          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('Nakit')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Banknote className="w-6 h-6" /> NAKİT (F4)</button>
-          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('KrediKarti')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-center gap-2 disabled:opacity-40"><CreditCard className="w-6 h-6" /> KART (F8)</button>
-          <button type="button" disabled={!cart.length || busy || priceLook} onClick={openSplit} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Layers className="w-6 h-6" /> PARÇALI (F10)</button>
-          <button type="button" disabled={!cart.length || busy || priceLook || !canCredit} onClick={() => checkout('Veresiye')} className="py-7 rounded-2xl text-base font-black bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Users className="w-6 h-6" /> VERESİYE (F9)</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('Nakit')} className="py-4 xl:py-7 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Banknote className="w-5 h-5 sm:w-6 sm:h-6" /> NAKİT</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={() => checkout('KrediKarti')} className="py-4 xl:py-7 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-center gap-2 disabled:opacity-40"><CreditCard className="w-5 h-5 sm:w-6 sm:h-6" /> KART</button>
+          <button type="button" disabled={!cart.length || busy || priceLook} onClick={openSplit} className="py-4 xl:py-7 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Layers className="w-5 h-5 sm:w-6 sm:h-6" /> PARÇALI</button>
+          <button type="button" disabled={!cart.length || busy || priceLook || !canCredit} onClick={() => checkout('Veresiye')} className="py-4 xl:py-7 rounded-2xl text-sm sm:text-base font-black bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-center gap-2 disabled:opacity-40"><Users className="w-5 h-5 sm:w-6 sm:h-6" /> VERESİYE</button>
         </div>
-        <button type="button" disabled={!cart.length || busy} onClick={() => setError('Fatura kesimi sıradaki adım. Satışı nakit, kart veya veresiye ile tamamlayın.')} className="w-full py-5 rounded-2xl text-base font-black border-2 border-purple-500/50 text-purple-300 bg-slate-950 flex items-center justify-center gap-2 disabled:opacity-40">
-          <FileText className="w-5 h-5" /> FATURA KES (F12)
+        <button type="button" disabled={!cart.length || busy} onClick={() => setError('Fatura kesimi sıradaki adım. Satışı nakit, kart veya veresiye ile tamamlayın.')} className="w-full py-4 xl:py-5 rounded-2xl text-sm sm:text-base font-black border-2 border-purple-500/50 text-purple-300 bg-slate-950 flex items-center justify-center gap-2 disabled:opacity-40">
+          <FileText className="w-5 h-5" /> FATURA KES
         </button>
       </div>
+      </div>
+
+      <nav className="xl:hidden shrink-0 grid grid-cols-3 gap-1.5 pt-0.5" style={{ paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}>
+        <button type="button" onClick={() => setPane('cart')} className={`py-2.5 rounded-2xl text-xs font-black border ${pane === 'cart' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
+          Sepet{cart.length ? ` (${cart.length})` : ''}
+        </button>
+        <button type="button" onClick={() => setPane('sale')} className={`py-2.5 rounded-2xl text-xs font-black border ${pane === 'sale' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
+          Ürünler
+        </button>
+        <button type="button" onClick={() => setPane('pay')} className={`py-2.5 rounded-2xl text-xs font-black border ${pane === 'pay' ? 'bg-teal-600 border-teal-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
+          Ödeme
+          <span className="block font-mono text-[10px] opacity-90">{money(total)}</span>
+        </button>
+      </nav>
 
       {categoryPicker && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -1680,7 +1709,7 @@ export default function QuickSalePage() {
 
       {okcOpen && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-          <div className="w-[520px] bg-slate-900 border border-slate-700 rounded-3xl p-5 space-y-3">
+          <div className="w-full max-w-[520px] max-h-[90dvh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-3xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-black text-lg">ÖKC Yazarkasa</div>
@@ -1756,7 +1785,7 @@ export default function QuickSalePage() {
 
       {fiscalWait && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-          <div className="w-[420px] bg-slate-900 border border-amber-400/70 rounded-3xl p-6 text-center space-y-3 text-white">
+          <div className="w-full max-w-[420px] bg-slate-900 border border-amber-400/70 rounded-3xl p-6 text-center space-y-3 text-white">
             <div className="text-2xl font-black tracking-wide text-amber-300">Fiş basılıyor</div>
             <p className="text-sm text-amber-100">{fiscalWait}</p>
             <p className="text-xs text-slate-300">Sepet duruyor. Yazarkasa bitirmeden satış kaydı yazılmaz.</p>
@@ -1766,7 +1795,7 @@ export default function QuickSalePage() {
 
       {paperModal && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-          <div className="w-[460px] bg-slate-900 border border-amber-500/50 rounded-3xl p-6 space-y-3">
+          <div className="w-full max-w-[460px] max-h-[90dvh] overflow-y-auto bg-slate-900 border border-amber-500/50 rounded-3xl p-5 sm:p-6 space-y-3">
             <div className="text-lg font-black">Kağıt bitti</div>
             <p className="text-sm text-amber-200">{paperModal.message || 'Kağıt rulosunu takıp kapağı kapatın, sonra devam edin.'}</p>
             <ol className="text-xs text-slate-400 list-decimal list-inside space-y-1">
@@ -1774,7 +1803,7 @@ export default function QuickSalePage() {
               <li>Kağıt değişti, devam et deyin. Fiş tamamlanır, satış o zaman kaydolur.</li>
             </ol>
             {paperModal.error && <p className="text-sm text-rose-300">{paperModal.error}</p>}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button type="button" disabled={!!paperModal.loading} onClick={resumePaper} className="flex-1 py-3 rounded-xl bg-emerald-600 font-bold disabled:opacity-50">
                 {paperModal.loading === 'resume' ? 'Devam ediyor...' : 'Kağıt değişti, devam et'}
               </button>
@@ -1787,8 +1816,8 @@ export default function QuickSalePage() {
       )}
 
       {splitOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="w-[360px] bg-slate-900 border border-purple-500/40 rounded-3xl p-5 space-y-3">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-[360px] bg-slate-900 border border-purple-500/40 rounded-3xl p-5 space-y-3">
             <div className="font-black text-lg">Parçalı ödeme</div>
             <div className="text-emerald-300 font-mono text-2xl">{money(total)}</div>
             <label className="block text-xs text-slate-400">Nakit

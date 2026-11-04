@@ -76,12 +76,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-auto">
-      <ThemeToggle labeled className="absolute top-4 right-4 z-20 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-900 border border-slate-700 text-slate-100" />
+    <div className="min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center p-4 pt-16 relative overflow-auto">
+      <ThemeToggle labeled className="absolute top-3 right-3 z-20 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-900 border border-slate-700 text-slate-100" />
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl relative z-10">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-8 shadow-2xl relative z-10">
         <div className="text-center space-y-3 mb-8">
           <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 items-center justify-center shadow-xl ring-4 ring-emerald-500/20">
             <ShoppingCart className="w-8 h-8 text-white" />

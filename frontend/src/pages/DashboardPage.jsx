@@ -35,7 +35,7 @@ const groups = [
 export default function DashboardPage() {
   const navigate = useNavigate()
   return (
-    <div className="p-6 max-w-[1650px] mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-[1650px] mx-auto space-y-5 sm:space-y-6">
       <h1 className="text-sm font-semibold text-slate-400">Gösterge Paneli</h1>
       {groups.map((group) => (
         <section key={group.title} className="space-y-3">
@@ -43,7 +43,7 @@ export default function DashboardPage() {
             <h2 className="text-xs font-bold text-slate-300 tracking-wider">{group.title}</h2>
             <div className="h-px flex-1 bg-slate-800" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
             {group.items.map((op) => {
               const Icon = op.icon
               return (
@@ -51,7 +51,7 @@ export default function DashboardPage() {
                   key={op.to}
                   type="button"
                   onClick={() => navigate(op.to)}
-                  className={`group relative overflow-hidden rounded-3xl p-6 text-left bg-gradient-to-br ${op.gradient} shadow-xl ring-1 ring-white/10 h-44 flex flex-col justify-between hover:-translate-y-1 transition`}
+                  className={`group relative overflow-hidden rounded-3xl p-5 sm:p-6 text-left bg-gradient-to-br ${op.gradient} shadow-xl ring-1 ring-white/10 min-h-[8.5rem] sm:h-44 flex flex-col justify-between hover:-translate-y-1 transition`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="w-12 h-12 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-white">

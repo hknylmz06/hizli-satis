@@ -35,16 +35,16 @@ export default function PosLayout() {
 
   if (isPos) {
     return (
-      <div className="h-screen bg-slate-950 text-slate-100">
+      <div className="h-[100dvh] overflow-hidden bg-slate-950 text-slate-100">
         <Outlet />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row overflow-hidden">
+    <div className="min-h-[100dvh] bg-slate-950 text-slate-100 flex flex-col lg:flex-row lg:h-[100dvh] lg:overflow-hidden">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-slate-950 legacy-page">
+      <main className="flex-1 min-w-0 overflow-y-auto bg-slate-950 legacy-page">
         <Outlet />
       </main>
     </div>

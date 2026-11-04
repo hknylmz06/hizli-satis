@@ -44,6 +44,7 @@ export default function Sidebar() {
   const [time, setTime] = useState(new Date().toLocaleTimeString('tr-TR'))
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(true)
+  const wide = mobileOpen || !collapsed
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date().toLocaleTimeString('tr-TR')), 1000)
@@ -75,13 +76,13 @@ export default function Sidebar() {
         </button>
       </div>
       {mobileOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />}
-      <aside className={`fixed lg:static top-0 left-0 bottom-0 z-50 ${collapsed ? 'w-[4.75rem]' : 'w-64'} bg-slate-950 border-r border-slate-800 text-slate-200 flex flex-col transition-all ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className={`border-b border-slate-800 flex items-center ${collapsed ? 'flex-col gap-2 px-2 py-3' : 'justify-between gap-2 p-4'}`}>
-          <div className={`flex items-center min-w-0 ${collapsed ? 'justify-center' : 'gap-3'}`}>
+      <aside className={`fixed lg:static top-0 left-0 bottom-0 z-50 ${mobileOpen ? 'w-72' : collapsed ? 'w-[4.75rem]' : 'w-64'} bg-slate-950 border-r border-slate-800 text-slate-200 flex flex-col transition-all ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className={`border-b border-slate-800 flex items-center ${wide ? 'justify-between gap-2 p-4' : 'flex-col gap-2 px-2 py-3'}`}>
+          <div className={`flex items-center min-w-0 ${wide ? 'gap-3' : 'justify-center'}`}>
             <div className="w-10 h-10 shrink-0 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-600 to-violet-700 flex items-center justify-center ring-2 ring-indigo-400/30">
               <ShoppingCart className="w-5 h-5 text-white" />
             </div>
-            {!collapsed && (
+            {wide && (
               <div className="min-w-0">
                 <h1 className="font-black text-sm text-white tracking-wide truncate">HIZLI SATIŞ</h1>
                 <p className="text-[10px] font-semibold tracking-widest text-indigo-400 uppercase truncate">Barkod sistemi</p>
@@ -98,7 +99,7 @@ export default function Sidebar() {
             if (!items.length) return null
             return (
             <div key={section.title}>
-              {!collapsed && <p className="px-2 mb-1 text-[10px] font-bold tracking-widest text-slate-500">{section.title}</p>}
+              {wide && <p className="px-2 mb-1 text-[10px] font-bold tracking-widest text-slate-500">{section.title}</p>}
               <div className="space-y-1">
                 {items.map((item) => {
                   const Icon = item.icon
@@ -111,7 +112,7 @@ export default function Sidebar() {
                       title={item.label}
                       className={({ isActive }) =>
                         `flex items-center rounded-xl text-sm font-semibold transition ${
-                          collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2'
+                          wide ? 'gap-2.5 px-3 py-2.5' : 'justify-center px-0 py-2.5'
                         } ${
                           isActive
                             ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow'
@@ -119,8 +120,8 @@ export default function Sidebar() {
                         }`
                       }
                     >
-                      <Icon className={`${collapsed ? 'w-5 h-5' : 'w-4 h-4'} shrink-0`} />
-                      {!collapsed && (
+                      <Icon className={`${wide ? 'w-4 h-4' : 'w-5 h-5'} shrink-0`} />
+                      {wide && (
                         <>
                           <span className="truncate flex-1">{item.label}</span>
                           {item.hotkey && <span className="text-[10px] font-mono opacity-70">{item.hotkey}</span>}
@@ -135,14 +136,14 @@ export default function Sidebar() {
           })}
         </nav>
         <div className="p-3 border-t border-slate-800 space-y-2">
-          {!collapsed && (
+          {wide && (
             <div className="px-2 text-[11px] text-slate-400">
               <div className="font-bold text-slate-200 truncate">{session.firmaName || session.displayName}</div>
               <div className="font-mono">{time}</div>
             </div>
           )}
           <ThemeToggle
-            labeled={!collapsed}
+            labeled={wide}
             className="w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-900 border border-slate-800 text-slate-200"
           />
           <button
@@ -150,8 +151,8 @@ export default function Sidebar() {
             onClick={() => { logout(); navigate('/') }}
             className="w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
           >
-            <LogOut className={`${collapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
-            {!collapsed && <span>Çıkış</span>}
+            <LogOut className={`${wide ? 'w-4 h-4' : 'w-5 h-5'}`} />
+            {wide && <span>Çıkış</span>}
           </button>
         </div>
       </aside>
